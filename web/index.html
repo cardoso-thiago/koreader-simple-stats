@@ -31,6 +31,12 @@
         <span class="badge-dot"></span>
         <span class="badge-label">Conectando…</span>
       </div>
+      <button id="btn-settings" class="settings-btn" title="Configurações">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
       <button id="btn-refresh" class="btn-icon" title="Recarregar dados">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
@@ -44,6 +50,10 @@
     <div><strong>Banco de Dados Não Encontrado</strong>
       <p id="error-msg">O arquivo <code>statistics.sqlite3</code> não foi localizado.</p>
     </div>
+  </div>
+
+  <div id="filter-banner" class="filter-banner hidden">
+    <span id="filter-banner-text">Filtros ativos</span>
   </div>
 
   <main id="dashboard" class="dashboard hidden">
@@ -275,7 +285,7 @@
             <button class="tab active" data-filter="all">Todos</button>
             <button class="tab" data-filter="reading">Lendo</button>
             <button class="tab" data-filter="finished">Concluídos</button>
-            <button class="tab" data-filter="abandoned">Pausados</button>
+            <button class="tab" data-filter="abandoned" id="tab-abandoned">Pausados</button>
           </div>
         </div>
       </div>
@@ -306,6 +316,78 @@
     <span id="footer-sync" class="footer-sync">—</span>
   </footer>
 
+  <!-- ════════════════════════════════════════════════════════════════════
+       Settings Dialog
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="settings-dialog" class="settings-dialog">
+    <div class="settings-content">
+      <div class="settings-header">
+        <h2>⚙ Configurações</h2>
+        <button id="settings-close" class="settings-close" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-body">
+
+        <!-- ── Accent Colour ─────────────────────────────────────────── -->
+        <div class="setting-section">
+          <div class="setting-section-title">Cor de Destaque</div>
+          <div id="accent-picker" class="accent-picker">
+            <!-- Swatches injected by JS -->
+          </div>
+        </div>
+
+        <!-- ── Exclude Abandoned ─────────────────────────────────────── -->
+        <div class="setting-section">
+          <div class="setting-section-title">Visibilidade</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Ocultar livros pausados</div>
+              <div class="toggle-hint">Não exibe nem considera nas estatísticas livros com status "abandonado"</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-exclude-abandoned">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ── Title Filters ─────────────────────────────────────────── -->
+        <div class="setting-section">
+          <div class="setting-section-title">Filtro de Títulos</div>
+          <div class="filter-group">
+            <div id="title-filter-list" class="filter-list"></div>
+            <button id="title-filter-add" class="filter-add-btn">+ Adicionar filtro de título</button>
+          </div>
+        </div>
+
+        <!-- ── Author Filters ────────────────────────────────────────── -->
+        <div class="setting-section">
+          <div class="setting-section-title">Filtro de Autores</div>
+          <div class="filter-group">
+            <div id="author-filter-list" class="filter-list"></div>
+            <button id="author-filter-add" class="filter-add-btn">+ Adicionar filtro de autor</button>
+          </div>
+        </div>
+
+        <!-- ── Preview ───────────────────────────────────────────────── -->
+        <div id="filter-preview" class="filter-preview">
+          Carregue os dados para ver a prévia dos filtros.
+        </div>
+
+      </div>
+
+      <div class="settings-footer">
+        <button id="settings-cancel" class="settings-btn-secondary">Cancelar</button>
+        <button id="settings-apply" class="settings-btn-primary">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Top 10 Lists Dialog -->
   <div id="top10-dialog" class="dialog">
     <div class="dialog-content">
@@ -323,6 +405,7 @@
       </div>
     </div>
   </div>
+
 </div>
 <script src="app.js"></script>
 </body>

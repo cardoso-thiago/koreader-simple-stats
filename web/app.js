@@ -23,6 +23,316 @@ let state = {
   topLists:      {},
 };
 
+/* ── Settings (persisted in localStorage) ──────────────────────────────── */
+const ACCENT_PRESETS = [
+  { name: 'Âmbar',   hex: '#d4a853' },
+  { name: 'Azul',    hex: '#5b9cf5' },
+  { name: 'Verde',   hex: '#4ade80' },
+  { name: 'Roxo',    hex: '#a78bfa' },
+  { name: 'Rosa',    hex: '#f472b6' },
+  { name: 'Teal',    hex: '#2dd4bf' },
+  { name: 'Laranja', hex: '#fb923c' },
+];
+
+const SETTINGS_KEY = 'koreader_settings';
+
+let settings = {
+  accent:           null,        // null = default amber
+  excludeAbandoned: false,
+  titleFilters:     [],          // [{op, val}, …]
+  authorFilters:    [],
+};
+
+let settingsDraft = {};          // working copy while dialog is open
+
+let lastFetchData  = null;       // raw API response for preview computation
+
+/* ── Settings persistence ──────────────────────────────────────────────── */
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s.accent !== undefined)           settings.accent           = s.accent;
+      if (s.excludeAbandoned !== undefined) settings.excludeAbandoned = s.excludeAbandoned;
+      if (Array.isArray(s.titleFilters))    settings.titleFilters     = s.titleFilters;
+      if (Array.isArray(s.authorFilters))   settings.authorFilters    = s.authorFilters;
+    }
+  } catch (_) { /* ignore corrupt data */ }
+}
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+  catch (_) {}
+}
+
+/* ── Accent colour ─────────────────────────────────────────────────────── */
+function hexToRgb(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return `${(v >> 16) & 255}, ${(v >> 8) & 255}, ${v & 255}`;
+}
+
+function applyAccent(hex) {
+  if (!hex) {
+    document.documentElement.style.removeProperty('--accent');
+    document.documentElement.style.removeProperty('--accent-rgb');
+  } else {
+    document.documentElement.style.setProperty('--accent', hex);
+    document.documentElement.style.setProperty('--accent-rgb', hexToRgb(hex));
+  }
+}
+
+/* ── Build filters JSON for the API ────────────────────────────────────── */
+function buildFiltersJSON(s) {
+  const f = {};
+  if (s.excludeAbandoned)  f.exclude_abandoned = true;
+  if (s.titleFilters.length) {
+    f.title_filters = s.titleFilters.map(t => ({ op: t.op, val: t.val }));
+  }
+  if (s.authorFilters.length) {
+    f.author_filters = s.authorFilters.map(a => ({ op: a.op, val: a.val }));
+  }
+  return Object.keys(f).length ? f : null;
+}
+
+/* ── Filter matching (local preview) ───────────────────────────────────── */
+function matchField(val, filters) {
+  if (!filters || !filters.length) return true;
+  const bval = (val || '').toLowerCase().trim();
+  for (const f of filters) {
+    const fval = (f.val || '').toLowerCase().trim();
+    if (!fval) continue;
+    if (f.op === 'equals'      && bval === fval)           return true;
+    if (f.op === 'starts_with' && bval.startsWith(fval))   return true;
+    if (f.op === 'ends_with'   && bval.endsWith(fval))     return true;
+    if (f.op === 'contains'    && bval.includes(fval))     return true;
+  }
+  return false;
+}
+
+function computeFilterPreview(draft, books) {
+  if (!books || !books.length) return null;
+  let list = books.slice();
+  if (draft.excludeAbandoned) list = list.filter(b => b.status !== 'abandoned');
+  // Filters are exclusive: matching books are REMOVED from results
+  list = list.filter(b => !matchField(b.title,  draft.titleFilters));
+  list = list.filter(b => !matchField(b.author, draft.authorFilters));
+  return list.length;
+}
+
+/* ── Update abandoned tab visibility ────────────────────────────────── */
+function updateAbandonedTab() {
+  const tab = document.getElementById('tab-abandoned');
+  // Hide if exclude-abandoned is active, or if no book has abandoned status
+  const hasAbandoned = state.books.some(b => b.status === 'abandoned');
+  tab.classList.toggle('hidden', settings.excludeAbandoned || !hasAbandoned);
+  // If current filter is 'abandoned' and tab got hidden, reset to 'all'
+  if (state.filter === 'abandoned' && tab.classList.contains('hidden')) {
+    state.filter = 'all';
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
+  }
+}
+
+/* ── Settings dialog ───────────────────────────────────────────────────── */
+function renderAccentSwatches(container, currentHex) {
+  container.innerHTML = '';
+  ACCENT_PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'accent-swatch' + (p.hex === currentHex ? ' active' : '');
+    btn.style.background = p.hex;
+    btn.title = p.name;
+    btn.dataset.hex = p.hex;
+    container.appendChild(btn);
+  });
+  // Reset button
+  const reset = document.createElement('button');
+  reset.className = 'accent-swatch accent-swatch--reset' + (!currentHex ? ' active' : '');
+  reset.textContent = '↺ Original';
+  reset.dataset.reset = '1';
+  container.appendChild(reset);
+}
+
+const FILTER_OPTS = [
+  ['contains',    'contém'],
+  ['equals',      'igual a'],
+  ['starts_with', 'inicia com'],
+  ['ends_with',   'termina com'],
+];
+
+function createFilterRow(op, val, onChange) {
+  const row = document.createElement('div');
+  row.className = 'filter-row';
+
+  const sel = document.createElement('select');
+  FILTER_OPTS.forEach(([v, label]) => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = label;
+    if (v === op) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', onChange);
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = val || '';
+  inp.placeholder = 'Valor…';
+  inp.addEventListener('input', onChange);
+
+  const rm = document.createElement('button');
+  rm.className = 'filter-remove';
+  rm.textContent = '×';
+  rm.title = 'Remover filtro';
+  rm.addEventListener('click', () => { row.remove(); onChange(); });
+
+  row.appendChild(sel);
+  row.appendChild(inp);
+  row.appendChild(rm);
+  return row;
+}
+
+function renderFilterRows(container, filters, onChange) {
+  container.innerHTML = '';
+  filters.forEach(f => {
+    container.appendChild(createFilterRow(f.op, f.val, onChange));
+  });
+}
+
+function readFilterDraft() {
+  const title = [];
+  document.querySelectorAll('#title-filter-list .filter-row').forEach(row => {
+    const sel = row.querySelector('select');
+    const inp = row.querySelector('input');
+    if (inp.value.trim()) title.push({ op: sel.value, val: inp.value.trim() });
+  });
+  const author = [];
+  document.querySelectorAll('#author-filter-list .filter-row').forEach(row => {
+    const sel = row.querySelector('select');
+    const inp = row.querySelector('input');
+    if (inp.value.trim()) author.push({ op: sel.value, val: inp.value.trim() });
+  });
+  return {
+    accent:           settingsDraft.accent,
+    excludeAbandoned: document.getElementById('toggle-exclude-abandoned').checked,
+    titleFilters:     title,
+    authorFilters:    author,
+  };
+}
+
+function updateFilterPreview() {
+  const draft = readFilterDraft();
+  const cnt = computeFilterPreview(draft, lastFetchData ? lastFetchData.books : null);
+  const el  = document.getElementById('filter-preview');
+  if (cnt === null) {
+    el.textContent = 'Carregue os dados para ver a prévia dos filtros.';
+  } else {
+    const total = lastFetchData ? lastFetchData.books.length : 0;
+    const hidden = total - cnt;
+    const parts = [];
+    if (cnt < total) {
+      parts.push(`<strong>${cnt}</strong> livro${cnt !== 1 ? 's' : ''} exibido${cnt !== 1 ? 's' : ''}`);
+      parts.push(`<strong>${hidden}</strong> ocultado${hidden !== 1 ? 's' : ''}`);
+    } else {
+      parts.push(`<strong>${cnt}</strong> livro${cnt !== 1 ? 's' : ''} (todos exibidos)`);
+    }
+    el.innerHTML = parts.join(' · ');
+  }
+}
+
+function openSettings() {
+  // Deep-clone current settings as draft
+  settingsDraft = JSON.parse(JSON.stringify(settings));
+  const d = settingsDraft;
+
+  // Accent swatches
+  renderAccentSwatches(document.getElementById('accent-picker'), d.accent);
+
+  // Toggle
+  document.getElementById('toggle-exclude-abandoned').checked = d.excludeAbandoned;
+
+  // Filter rows
+  const titleContainer = document.getElementById('title-filter-list');
+  const authorContainer = document.getElementById('author-filter-list');
+  const onChange = updateFilterPreview;
+  renderFilterRows(titleContainer, d.titleFilters, onChange);
+  renderFilterRows(authorContainer, d.authorFilters, onChange);
+
+  // Preview
+  updateFilterPreview();
+
+  document.getElementById('settings-dialog').classList.add('visible');
+}
+
+function closeSettings() {
+  document.getElementById('settings-dialog').classList.remove('visible');
+  // Restore original accent (in case user previewed a different one)
+  applyAccent(settings.accent);
+}
+
+function applySettings() {
+  const draft = readFilterDraft();
+
+  // Accent
+  settings.accent = draft.accent;
+  applyAccent(settings.accent);
+
+  // Other
+  settings.excludeAbandoned = draft.excludeAbandoned;
+  settings.titleFilters     = draft.titleFilters;
+  settings.authorFilters    = draft.authorFilters;
+
+  saveSettings();
+  closeSettings();
+  fetchStats();   // re-fetch with new filters
+}
+
+/* ── Accent picker click handling ──────────────────────────────────────── */
+function initAccentPicker() {
+  document.getElementById('accent-picker').addEventListener('click', e => {
+    const swatch = e.target.closest('.accent-swatch');
+    if (!swatch) return;
+    // Update active state
+    swatch.closest('.accent-picker').querySelectorAll('.accent-swatch').forEach(s => s.classList.remove('active'));
+    swatch.classList.add('active');
+    // Set draft
+    if (swatch.dataset.reset) {
+      settingsDraft.accent = null;
+      // show original colour live
+      applyAccent(null);
+    } else {
+      settingsDraft.accent = swatch.dataset.hex;
+      applyAccent(swatch.dataset.hex);
+    }
+  });
+}
+
+/* ── Filter add buttons ────────────────────────────────────────────────── */
+function initFilterAddButtons() {
+  document.getElementById('title-filter-add').addEventListener('click', () => {
+    const container = document.getElementById('title-filter-list');
+    container.appendChild(createFilterRow('contains', '', updateFilterPreview));
+    updateFilterPreview();
+  });
+  document.getElementById('author-filter-add').addEventListener('click', () => {
+    const container = document.getElementById('author-filter-list');
+    container.appendChild(createFilterRow('contains', '', updateFilterPreview));
+    updateFilterPreview();
+  });
+}
+
+/* ── Settings dialog init ──────────────────────────────────────────────── */
+function initSettingsDialog() {
+  document.getElementById('btn-settings').addEventListener('click', openSettings);
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+  document.getElementById('settings-apply').addEventListener('click', applySettings);
+  // Close on overlay click
+  document.getElementById('settings-dialog').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeSettings();
+  });
+  // Toggle change -> update preview
+  document.getElementById('toggle-exclude-abandoned').addEventListener('change', updateFilterPreview);
+}
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtHours(secs) {
@@ -89,10 +399,7 @@ function baseTooltip() {
   };
 }
 function baseGrid() {
-  return {
-    color: 'rgba(255,255,255,0.04)',
-    drawBorder: false,
-  };
+  return { color: 'rgba(255,255,255,0.04)', drawBorder: false };
 }
 function baseTick() {
   return { color: '#46546a', font: { size: 10 } };
@@ -100,6 +407,12 @@ function baseTick() {
 
 function destroyChart(key) {
   if (state.charts[key]) { state.charts[key].destroy(); state.charts[key] = null; }
+}
+
+/* ── Read accent RGB from CSS variable ─────────────────────────────── */
+function getAccentRGB() {
+  const val = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim();
+  return val || '212, 168, 83';
 }
 
 /* ── Monthly chart ─────────────────────────────────────────────────────── */
@@ -123,8 +436,8 @@ function renderMonthlyChart() {
       datasets: [{
         label: 'Horas',
         data: slice.map(d => d.hours),
-        backgroundColor: slice.map(d => `rgba(212,168,83,${0.35 + 0.55 * (d.hours / Math.max(...data.map(x=>x.hours)||1))})`),
-        borderColor: 'rgba(212,168,83,0.7)',
+        backgroundColor: slice.map(d => `rgba(${getAccentRGB()},${0.35 + 0.55 * (d.hours / Math.max(...data.map(x=>x.hours)||1))})`),
+        borderColor: `rgba(${getAccentRGB()},0.7)`,
         borderWidth: 1,
         borderRadius: 4,
         borderSkipped: false,
@@ -275,11 +588,8 @@ function renderHeatmap(cells) {
   grid.innerHTML = '';
   months.innerHTML = '';
 
-  // Compute column widths for month labels
-  const CELL = 13; // 11px + 2px gap
-  let currentMonth = null;
+  const CELL = 13;
   let monthCols = {};
-
   cells.forEach((cell, i) => {
     const col = Math.floor(i / 7);
     const mo  = cell.date.slice(0, 7);
@@ -287,7 +597,6 @@ function renderHeatmap(cells) {
     else monthCols[mo].end = col;
   });
 
-  // Month label row
   let prevEnd = -1;
   Object.entries(monthCols).forEach(([mo, { start, end }]) => {
     if (start <= prevEnd) start = prevEnd + 1;
@@ -305,7 +614,6 @@ function renderHeatmap(cells) {
     prevEnd = end;
   });
 
-  // Cells
   cells.forEach(cell => {
     const div = document.createElement('div');
     div.className = 'hm-cell';
@@ -322,7 +630,6 @@ function renderHeatmap(cells) {
     grid.appendChild(div);
   });
 
-  // Stats
   const yearDays  = cells.filter(c => !c.future && c.hours > 0).length;
   const today     = new Date();
   const d30       = new Date(today); d30.setDate(today.getDate() - 30);
@@ -387,34 +694,40 @@ function renderInsights(ins) {
 function renderKPIs(summary, insights) {
   const s = summary;
 
-  // Animate total books
   const booksEl = document.getElementById('val-total-books');
   animateValue(booksEl, s.total_books);
   document.getElementById('desc-books-split').textContent =
     `${s.reading_books} lendo · ${s.finished_books} lidos · ${s.abandoned_books} pausados`;
 
-  // Time
   document.getElementById('val-reading-time').textContent = fmtHours(s.total_time_seconds);
   document.getElementById('desc-reading-days').textContent =
     `${fmt(insights.total_reading_days)} dias de atividade`;
 
-  // Pages
   animateValue(document.getElementById('val-pages-read'), s.total_pages_read);
   document.getElementById('desc-avg-page-time').textContent =
     `Média de ${fmtMinSec(s.avg_page_time_seconds)} por página`;
 
-  // Speed
   animateValue(document.getElementById('val-reading-speed'), s.avg_speed_pages_hour, 800);
 
-  // Highlights
   animateValue(document.getElementById('val-highlights'), s.total_highlights + s.total_notes);
   document.getElementById('desc-highlights-notes').textContent =
     `${fmt(s.total_highlights)} destaques · ${fmt(s.total_notes)} notas`;
 
-  // Streak
   animateValue(document.getElementById('val-current-streak'), insights.current_streak);
   document.getElementById('desc-max-streak').textContent =
     `Recorde: ${fmt(insights.max_streak)} dias`;
+
+  // Update filter banner
+  const fi = state._lastFilterInfo || {};
+  const banner = document.getElementById('filter-banner');
+  const bannerText = document.getElementById('filter-banner-text');
+  if (fi.active) {
+    banner.classList.remove('hidden');
+    const total = fi.total_after_filter;
+    bannerText.textContent = `Filtros ativos: ${total} livro${total !== 1 ? 's' : ''} exibido${total !== 1 ? 's' : ''}`;
+  } else {
+    banner.classList.add('hidden');
+  }
 }
 
 /* ── Books table ───────────────────────────────────────────────────────── */
@@ -545,7 +858,14 @@ async function fetchStats() {
   setStatus('loading', 'Carregando…');
 
   try {
-    const res  = await fetch(API.stats);
+    // Build filter param
+    const filtersObj = buildFiltersJSON(settings);
+    let url = API.stats;
+    if (filtersObj) {
+      url += '?filters=' + encodeURIComponent(JSON.stringify(filtersObj));
+    }
+
+    const res  = await fetch(url);
     const data = await res.json();
 
     if (data.error) {
@@ -559,7 +879,11 @@ async function fetchStats() {
     document.getElementById('error-banner').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
 
-    const { summary, insights, charts, heatmap, top_authors, books } = data;
+    const { summary, insights, charts, heatmap, top_authors, books, filter_info } = data;
+
+    // Store for preview computation
+    lastFetchData = data;
+    state._lastFilterInfo = filter_info || {};
 
     // Store and render
     state.books       = books;
@@ -587,15 +911,13 @@ async function fetchStats() {
     state.sortCol     = null;
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
     applyBookFilters();
+    updateAbandonedTab();
 
-    // Footer sync time
     const now = new Date();
     document.getElementById('footer-sync').innerHTML =
       `Atualizado às <strong>${now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</strong>`;
 
     setStatus('ok', 'Banco OK');
-
-    // Store DB mtime for polling
     state.lastDbMtime = data._mtime || 0;
 
   } catch (err) {
@@ -669,10 +991,18 @@ function hideTop10List() {
 
 /* ── Init ──────────────────────────────────────────────────────────────── */
 function init() {
+  // Load persistent settings
+  loadSettings();
+  applyAccent(settings.accent);
+
+  // Init UI
   initTableSort();
   initFilterTabs();
   initSearch();
   initMonthNav();
+  initAccentPicker();
+  initFilterAddButtons();
+  initSettingsDialog();
 
   document.getElementById('btn-refresh').addEventListener('click', fetchStats);
   document.getElementById('dialog-close').addEventListener('click', hideTop10List);
