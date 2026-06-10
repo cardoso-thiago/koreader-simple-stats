@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  koreader-stats:
+    build: .
+    container_name: koreader-statistics
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_PATH=/app/statistics.sqlite3
+      - TZ_NAME=America/Sao_Paulo
+      - TZ_OFFSET_HOURS=-3
+    volumes:
+      # Compartilha o arquivo de estatísticas como SOMENTE LEITURA (:ro)
+      # Isso garante que o Docker não possa corromper o seu arquivo original
+      - ./statistics.sqlite3:/app/statistics.sqlite3:ro

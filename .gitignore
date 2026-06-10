@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv
+venv/
+
+# SQLite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db

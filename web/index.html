@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KOReader · Estante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="header">
+    <div class="header-brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+        </svg>
+      </div>
+      <div class="brand-name">
+        <h1>KOReader <em>Estante</em></h1>
+        <p>Hábitos e padrões de leitura</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="status-badge" class="badge badge--loading">
+        <span class="badge-dot"></span>
+        <span class="badge-label">Conectando…</span>
+      </div>
+      <button id="btn-refresh" class="btn-icon" title="Recarregar dados">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="error-banner" class="error-banner hidden">
+    <div class="error-banner__icon">⚠</div>
+    <div><strong>Banco de Dados Não Encontrado</strong>
+      <p id="error-msg">O arquivo <code>statistics.sqlite3</code> não foi localizado.</p>
+    </div>
+  </div>
+
+  <main id="dashboard" class="dashboard hidden">
+
+    <!-- KPI GRID -->
+    <section class="kpi-grid">
+      <div class="kpi-card kpi-card--amber">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Biblioteca</span>
+          <div class="kpi-value" id="val-total-books">—</div>
+          <span class="kpi-sub" id="desc-books-split">— lendo · — lidos · — pausados</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--blue">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Tempo de Leitura</span>
+          <div class="kpi-value" id="val-reading-time">—</div>
+          <span class="kpi-sub" id="desc-reading-days">— dias de atividade</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--green">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Páginas Lidas</span>
+          <div class="kpi-value" id="val-pages-read">—</div>
+          <span class="kpi-sub" id="desc-avg-page-time">Média de — por página</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--violet">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Velocidade Média</span>
+          <div class="kpi-value"><span id="val-reading-speed">—</span> <span class="kpi-unit">pág/h</span></div>
+          <span class="kpi-sub">Velocidade geral calculada</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--rose">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Anotações</span>
+          <div class="kpi-value" id="val-highlights">—</div>
+          <span class="kpi-sub" id="desc-highlights-notes">— destaques · — notas</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--amber">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Sequência Atual</span>
+          <div class="kpi-value"><span id="val-current-streak">—</span> <span class="kpi-unit">dias</span></div>
+          <span class="kpi-sub" id="desc-max-streak">Recorde: — dias</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- HEATMAP -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Calendário de Leitura
+        </h2>
+        <div class="heatmap-legend">
+          <span class="legend-label">Menos</span>
+          <div class="legend-scale">
+            <div class="legend-cell" data-level="0"></div>
+            <div class="legend-cell" data-level="1"></div>
+            <div class="legend-cell" data-level="2"></div>
+            <div class="legend-cell" data-level="3"></div>
+            <div class="legend-cell" data-level="4"></div>
+          </div>
+          <span class="legend-label">Mais</span>
+        </div>
+      </div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-days">
+          <span></span><span>Seg</span><span></span>
+          <span>Qua</span><span></span><span>Sex</span><span></span>
+        </div>
+        <div class="heatmap-scroll">
+          <div id="heatmap-months" class="heatmap-months"></div>
+          <div id="heatmap-grid" class="heatmap-grid"></div>
+        </div>
+      </div>
+      <div class="heatmap-footer">
+        <span id="hm-stat-year" class="hm-stat">—</span>
+        <span id="hm-stat-30d" class="hm-stat">—</span>
+      </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Descobertas
+        </h2>
+      </div>
+      <div class="insights-grid">
+        <div class="insight-card insight-card--profile">
+          <div class="insight-label">Perfil de Leitor</div>
+          <div class="insight-value" id="insight-profile">—</div>
+          <div class="insight-meta">
+            <span>Dia favorito: <strong id="insight-pref-dow">—</strong></span>
+            <span>Hora favorita: <strong id="insight-pref-hour">—</strong></span>
+          </div>
+        </div>
+        <div class="insight-card" data-list="longest" onclick="showTop10List('longest')">
+          <div class="insight-label">Livro Mais Longo</div>
+          <div class="insight-title" id="insight-longest-title">—</div>
+          <div class="insight-author" id="insight-longest-author">—</div>
+          <div class="insight-badge" id="insight-longest-pages">— páginas</div>
+        </div>
+        <div class="insight-card" data-list="mostTime" onclick="showTop10List('mostTime')">
+          <div class="insight-label">Mais Tempo Dedicado</div>
+          <div class="insight-title" id="insight-time-title">—</div>
+          <div class="insight-author" id="insight-time-author">—</div>
+          <div class="insight-badge" id="insight-time-hours">— horas</div>
+        </div>
+        <div class="insight-card" data-list="fastest" onclick="showTop10List('fastest')">
+          <div class="insight-label">Leitura Mais Rápida</div>
+          <div class="insight-title" id="insight-fastest-title">—</div>
+          <div class="insight-author" id="insight-fastest-author">—</div>
+          <div class="insight-badge insight-badge--green" id="insight-fastest-speed">— pág/h</div>
+        </div>
+        <div class="insight-card" data-list="slowest" onclick="showTop10List('slowest')">
+          <div class="insight-label">Mais Cadenciado</div>
+          <div class="insight-title" id="insight-slowest-title">—</div>
+          <div class="insight-author" id="insight-slowest-author">—</div>
+          <div class="insight-badge insight-badge--violet" id="insight-slowest-speed">— pág/h</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHARTS GRID -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Atividade Mensal</h3>
+          <div class="chart-nav">
+            <button id="btn-prev-month" class="chart-nav-btn" title="Período anterior">←</button>
+            <span id="label-month-page" class="chart-nav-label">1 / 1</span>
+            <button id="btn-next-month" class="chart-nav-btn" title="Período seguinte">→</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header"><h3>Horário de Leitura</h3></div>
+        <div class="chart-wrap"><canvas id="chart-hourly"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header"><h3>Hábitos por Dia da Semana</h3></div>
+        <div class="chart-wrap"><canvas id="chart-weekly"></canvas></div>
+      </div>
+      <div class="chart-card chart-card--donut">
+        <div class="chart-card-header"><h3>Status da Biblioteca</h3></div>
+        <div class="chart-wrap chart-wrap--donut"><canvas id="chart-status"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Distribuição por Tamanho</h3>
+          <span class="chart-sub">páginas por livro</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-size"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Top 10 Autores</h3>
+          <span class="chart-sub">por tempo de leitura</span>
+        </div>
+        <div class="authors-list" id="top-authors-list"></div>
+      </div>
+    </div>
+
+    <!-- BOOKS TABLE -->
+    <section class="section books-section">
+      <div class="section-header section-header--wrap">
+        <h2 class="section-title">
+          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+            <line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+            <line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+          Todos os Livros
+        </h2>
+        <div class="books-controls">
+          <div class="search-wrap">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="search-books" class="search-input" placeholder="Buscar título ou autor…">
+          </div>
+          <div class="filter-tabs">
+            <button class="tab active" data-filter="all">Todos</button>
+            <button class="tab" data-filter="reading">Lendo</button>
+            <button class="tab" data-filter="finished">Concluídos</button>
+            <button class="tab" data-filter="abandoned">Pausados</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="books-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="title" data-dir="asc">Livro <span class="sort-icon">↕</span></th>
+              <th>Progresso</th>
+              <th class="sortable" data-col="pages" data-dir="asc">Págs <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="reading_days" data-dir="asc">Dias <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="time_hours" data-dir="asc">Tempo <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="speed_pages_hour" data-dir="asc">Vel. <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="highlights" data-dir="asc">Anot. <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="last_open" data-dir="asc">Última Abertura <span class="sort-icon">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="books-tbody"></tbody>
+        </table>
+        <div id="books-empty" class="books-empty hidden">Nenhum livro encontrado.</div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>KOReader Estante · Python + SQLite3</span>
+    <span id="footer-sync" class="footer-sync">—</span>
+  </footer>
+
+  <!-- Top 10 Lists Dialog -->
+  <div id="top10-dialog" class="dialog">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h2 id="dialog-title">Top 10</h2>
+        <button id="dialog-close" class="dialog-close" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div id="dialog-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
