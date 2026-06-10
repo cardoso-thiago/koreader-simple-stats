@@ -118,6 +118,8 @@ a      { color: inherit; text-decoration: none; }
   background: var(--text-3);
   transition: var(--t);
 }
+
+.empty-chart-msg { color: var(--text-2); text-align: center; padding: 2rem 1rem; font-size: 13px; }
 .badge--ok    { border-color: rgba(74,222,128,0.3); }
 .badge--ok    .badge-dot { background: var(--green); box-shadow: 0 0 6px rgba(74,222,128,0.6); }
 .badge--warn  { border-color: rgba(var(--accent-rgb),0.3); }

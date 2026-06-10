@@ -515,19 +515,65 @@ function renderWeeklyChart(weekly) {
   });
 }
 
+/* ── Custom Chart.js plugin: center text for doughnut ─────────────── */
+const centerTextPlugin = {
+  id: 'centerText',
+  afterDraw(chart) {
+    const { width, height, ctx, data } = chart;
+    ctx.save();
+    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+    if (!total) { ctx.restore(); return; }
+    const centerX = width / 2;
+    const centerY = height / 2 - 2;
+
+    ctx.font = 'bold 20px "DM Sans", sans-serif';
+    ctx.fillStyle = '#f0f4f8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(String(total), centerX, centerY - 2);
+
+    ctx.font = '11px "DM Sans", sans-serif';
+    ctx.fillStyle = '#8898b4';
+    ctx.textBaseline = 'top';
+    ctx.fillText('livros', centerX, centerY + 2);
+    ctx.restore();
+  }
+};
+
 /* ── Status donut ──────────────────────────────────────────────────────── */
 function renderStatusChart(summary) {
   destroyChart('status');
   const ctx = document.getElementById('chart-status').getContext('2d');
   const { finished_books: fin, reading_books: rdg, abandoned_books: abn } = summary;
+
+  // Build only non-zero entries
+  const entries = [
+    { label: 'Concluídos', value: fin, color: 'rgba(74,222,128,0.8)', border: 'rgba(74,222,128,0.4)' },
+    { label: 'Lendo',      value: rdg, color: 'rgba(91,156,245,0.8)', border: 'rgba(91,156,245,0.4)' },
+    { label: 'Pausados',   value: abn, color: 'rgba(70,84,106,0.6)',  border: 'rgba(70,84,106,0.4)' },
+  ].filter(e => e.value > 0);
+
+  if (!entries.length) {
+    // Fallback: nothing to show
+    state.charts.status = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels: ['Sem dados'], datasets: [{ data: [1], backgroundColor: ['rgba(70,84,106,0.2)'], borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { display: false } } },
+      plugins: [centerTextPlugin],
+    });
+    return;
+  }
+
+  const total = entries.reduce((s, e) => s + e.value, 0);
+
   state.charts.status = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Concluídos', 'Lendo', 'Pausados'],
+      labels: entries.map(e => `${e.label}: ${Math.round((e.value / total) * 100)}%`),
       datasets: [{
-        data: [fin, rdg, abn],
-        backgroundColor: ['rgba(74,222,128,0.8)', 'rgba(91,156,245,0.8)', 'rgba(70,84,106,0.6)'],
-        borderColor:     ['rgba(74,222,128,0.4)', 'rgba(91,156,245,0.4)', 'rgba(70,84,106,0.4)'],
+        data: entries.map(e => e.value),
+        backgroundColor: entries.map(e => e.color),
+        borderColor:     entries.map(e => e.border),
         borderWidth: 2,
         hoverOffset: 6,
       }],
@@ -540,23 +586,30 @@ function renderStatusChart(summary) {
           position: 'bottom',
           labels: { padding: 12, boxWidth: 10, boxHeight: 10, usePointStyle: true },
         },
-        tooltip: { ...baseTooltip(), callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` } },
+        tooltip: { ...baseTooltip(), callbacks: { label: ctx => ` ${ctx.parsed} livro${ctx.parsed !== 1 ? 's' : ''}` } },
       },
     },
+    plugins: [centerTextPlugin],
   });
 }
 
 /* ── Size distribution chart ───────────────────────────────────────────── */
 function renderSizeChart(sizeDist) {
   destroyChart('size');
+  const filtered = sizeDist.filter(d => d.count > 0);
+  if (!filtered.length) {
+    document.getElementById('chart-size').parentElement.innerHTML =
+      '<p class="empty-chart-msg">Nenhum livro cadastrado.</p>';
+    return;
+  }
   const ctx = document.getElementById('chart-size').getContext('2d');
   state.charts.size = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: sizeDist.map(d => d.range),
+      labels: filtered.map(d => d.range),
       datasets: [{
         label: 'Livros',
-        data: sizeDist.map(d => d.count),
+        data: filtered.map(d => d.count),
         backgroundColor: 'rgba(167,139,250,0.4)',
         borderColor: 'rgba(167,139,250,0.7)',
         borderWidth: 1, borderRadius: 4, borderSkipped: false,
