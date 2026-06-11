@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """KOReader Estante - Backend"""
-import os, sys, json, sqlite3, datetime, urllib.parse, tempfile
+import os, sys, json, sqlite3, datetime, urllib.parse, tempfile, hashlib, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DB_PATH = os.environ.get("DB_PATH", "statistics.sqlite3")
@@ -185,6 +185,38 @@ def _apply_book_filters(books, filters):
     desc = ", ".join(applied) if applied else None
 
     return out, desc
+
+# ── Stats response cache ────────────────────────────────────────────────
+_stats_cache = {}
+_stats_cache_lock = threading.Lock()
+_CACHE_MAX_ENTRIES = 20
+
+def _cache_key(filters_raw, db_mtime):
+    raw = f"f:{filters_raw or ''}|m:{db_mtime}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+def _check_stats_cache(filters_raw):
+    try:
+        mtime = os.stat(DB_PATH).st_mtime
+    except OSError:
+        return None
+    key = _cache_key(filters_raw, mtime)
+    with _stats_cache_lock:
+        entry = _stats_cache.get(key)
+        if entry:
+            return entry
+    return None
+
+def _save_stats_cache(filters_raw, result):
+    mtime = result.get("_mtime", 0)
+    if not mtime:
+        return
+    key = _cache_key(filters_raw, mtime)
+    with _stats_cache_lock:
+        if len(_stats_cache) >= _CACHE_MAX_ENTRIES and key not in _stats_cache:
+            # LRU: pop the first inserted key (dict preserves insertion order in Python 3.7+)
+            _stats_cache.pop(next(iter(_stats_cache)))
+        _stats_cache[key] = result
 
 # ── Statistics engine ─────────────────────────────────────────────────────
 
@@ -441,9 +473,31 @@ class Handler(BaseHTTPRequestHandler):
         if args and len(args)>=2 and str(args[1])[0] in("4","5"): super().log_message(fmt,*args)
     def send_json(self,data,status=200):
         body=json.dumps(data,ensure_ascii=False).encode("utf-8")
-        self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin","*"); self.send_header("Cache-Control","no-store")
-        self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
+        try:
+            self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin","*"); self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+    def _respond_cached(self, data):
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        etag = '"' + hashlib.md5(body).hexdigest() + '"'
+        try:
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("ETag", etag)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
     def _read_json_body(self):
         length = int(self.headers.get("Content-Length", "0") or "0")
         raw = self.rfile.read(length) if length > 0 else b"{}"
@@ -461,7 +515,19 @@ class Handler(BaseHTTPRequestHandler):
 
         if path=="/api/stats":
             filters_raw = qs.get("filters", [None])[0]
-            self.send_json(get_statistics(filters_raw)); return
+            # Try server memory cache (keyed by filters + DB mtime)
+            cached = _check_stats_cache(filters_raw)
+            if cached is not None:
+                self._respond_cached(cached)
+                return
+            # Cache miss — compute fresh statistics
+            result = get_statistics(filters_raw)
+            if "error" in result:
+                self.send_json(result)
+                return
+            _save_stats_cache(filters_raw, result)
+            self._respond_cached(result)
+            return
 
         fp="web/index.html" if path=="/" else os.path.normpath(os.path.join("web",path.lstrip("/")))
         if not (fp.startswith("web"+os.sep) or fp=="web"): self.send_error(403); return

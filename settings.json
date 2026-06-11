@@ -1,0 +1,11 @@
+{
+  "accent": "#2dd4bf",
+  "authorFilters": [
+    {
+      "op": "equals",
+      "val": "Autor Desconhecido"
+    }
+  ],
+  "excludeAbandoned": true,
+  "titleFilters": []
+}

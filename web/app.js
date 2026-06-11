@@ -20,6 +20,7 @@ let state = {
   filter:        'all',
   searchQuery:   '',
   lastDbMtime:   0,
+  etag:          null,
   charts:        {},
   topLists:      {},
   topListMarkup: {},
@@ -1002,8 +1003,21 @@ async function fetchStats() {
       url += '?filters=' + encodeURIComponent(JSON.stringify(filtersObj));
     }
 
-    const res  = await fetch(url);
+    const headers = {};
+    if (state.etag) {
+      headers['If-None-Match'] = state.etag;
+    }
+
+    const res  = await fetch(url, { headers });
+
+    if (res.status === 304) {
+      setStatus('ok', 'Banco OK');
+      btn.classList.remove('spinning');
+      return;
+    }
+
     const data = await res.json();
+    state.etag = res.headers.get('ETag') || state.etag;
 
     if (data.error) {
       document.getElementById('error-banner').classList.remove('hidden');
