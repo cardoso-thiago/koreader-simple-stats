@@ -125,11 +125,8 @@ def _filter_sql(sql, ids):
     clause = f"id_book IN ({placeholders})"
     connector = "AND" if "WHERE" in sql else "WHERE"
     insert = f"{connector} {clause}"
-    # Insert before GROUP BY if present (must be checked before ORDER BY
-    # since GROUP BY logically comes before ORDER BY in SQL)
     if "GROUP BY" in sql:
         return sql.replace("GROUP BY", f"{insert} GROUP BY", 1)
-    # Insert before ORDER BY if present
     order_idx = sql.rfind("ORDER BY")
     if order_idx != -1:
         return sql[:order_idx] + insert + " " + sql[order_idx:]
@@ -214,7 +211,6 @@ def _save_stats_cache(filters_raw, result):
     key = _cache_key(filters_raw, mtime)
     with _stats_cache_lock:
         if len(_stats_cache) >= _CACHE_MAX_ENTRIES and key not in _stats_cache:
-            # LRU: pop the first inserted key (dict preserves insertion order in Python 3.7+)
             _stats_cache.pop(next(iter(_stats_cache)))
         _stats_cache[key] = result
 
@@ -266,13 +262,11 @@ def get_statistics(raw_filters=None):
         # ── 2. Apply user filters ───────────────────────────────────────
         books_before = len(books)
         books, filter_desc = _apply_book_filters(books, parsed_filters)
-        # Only restrict page_stat_data queries if books were actually removed
         filter_actually_changed = len(books) != books_before
 
         included_ids = tuple(b["id"] for b in books)
         ids_param = included_ids if filter_actually_changed else None
 
-        # Report whether filters are active (for the UI banner)
         has_filter = parsed_filters is not None and (
             parsed_filters.get("exclude_abandoned", False) or
             (parsed_filters.get("title_filters") or []) or
@@ -315,7 +309,6 @@ def get_statistics(raw_filters=None):
         for r in c.fetchall(): wmap[r[0]]=round(r[1],2)
         weekly=[{"dow":int(k),"day":dow[int(k)],"hours":v} for k,v in sorted(wmap.items())]
 
-        # Streak & total reading days are always computed from ALL books
         c.execute(
             f"SELECT DISTINCT date(start_time,'unixepoch','{TZ_SQL}') "
             f"FROM page_stat_data WHERE start_time>0 ORDER BY 1")
@@ -515,12 +508,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path=="/api/stats":
             filters_raw = qs.get("filters", [None])[0]
-            # Try server memory cache (keyed by filters + DB mtime)
             cached = _check_stats_cache(filters_raw)
             if cached is not None:
                 self._respond_cached(cached)
                 return
-            # Cache miss — compute fresh statistics
             result = get_statistics(filters_raw)
             if "error" in result:
                 self.send_json(result)

@@ -84,7 +84,6 @@ function loadSettingsCache() {
     if (!raw) return;
     settings = normalizeSettings(JSON.parse(raw));
   } catch (_) {
-    // Ignore corrupt cache and continue with defaults.
   }
 }
 
@@ -92,7 +91,6 @@ function saveSettingsCache(nextSettings = settings) {
   try {
     localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(normalizeSettings(nextSettings)));
   } catch (_) {
-    // Ignore cache write failures.
   }
 }
 
@@ -105,7 +103,6 @@ async function loadSettings() {
     settings = normalizeSettings(await res.json());
     saveSettingsCache(settings);
   } catch (_) {
-    // Keep local cache/defaults if the server settings endpoint is unavailable.
   }
 }
 
@@ -179,7 +176,6 @@ function computeFilterPreview(draft, books) {
   if (!books || !books.length) return null;
   let list = books.slice();
   if (draft.excludeAbandoned) list = list.filter(b => b.status !== 'abandoned');
-  // Filters are exclusive: matching books are REMOVED from results
   list = list.filter(b => !matchField(b.title,  draft.titleFilters));
   list = list.filter(b => !matchField(b.author, draft.authorFilters));
   return list.length;
@@ -188,10 +184,8 @@ function computeFilterPreview(draft, books) {
 /* ── Update abandoned tab visibility ────────────────────────────────── */
 function updateAbandonedTab() {
   const tab = document.getElementById('tab-abandoned');
-  // Hide if exclude-abandoned is active, or if no book has abandoned status
   const hasAbandoned = state.books.some(b => b.status === 'abandoned');
   tab.classList.toggle('hidden', settings.excludeAbandoned || !hasAbandoned);
-  // If current filter is 'abandoned' and tab got hidden, reset to 'all'
   if (state.filter === 'abandoned' && tab.classList.contains('hidden')) {
     state.filter = 'all';
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
@@ -304,7 +298,6 @@ function updateFilterPreview() {
 }
 
 function openSettings() {
-  // Deep-clone current settings as draft
   settingsDraft = JSON.parse(JSON.stringify(settings));
   const d = settingsDraft;
 
@@ -329,14 +322,12 @@ function openSettings() {
 
 function closeSettings() {
   document.getElementById('settings-dialog').classList.remove('visible');
-  // Restore original accent (in case user previewed a different one)
   applyAccent(settings.accent);
 }
 
 async function applySettings() {
   const draft = readFilterDraft();
 
-  // Accent
   const nextSettings = {
     ...settings,
     accent: draft.accent,
@@ -357,13 +348,10 @@ function initAccentPicker() {
   document.getElementById('accent-picker').addEventListener('click', e => {
     const swatch = e.target.closest('.accent-swatch');
     if (!swatch) return;
-    // Update active state
     swatch.closest('.accent-picker').querySelectorAll('.accent-swatch').forEach(s => s.classList.remove('active'));
     swatch.classList.add('active');
-    // Set draft
     if (swatch.dataset.reset) {
       settingsDraft.accent = null;
-      // show original colour live
       applyAccent(null);
     } else {
       settingsDraft.accent = swatch.dataset.hex;
@@ -392,11 +380,9 @@ function initSettingsDialog() {
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-cancel').addEventListener('click', closeSettings);
   document.getElementById('settings-apply').addEventListener('click', applySettings);
-  // Close on overlay click
   document.getElementById('settings-dialog').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeSettings();
   });
-  // Toggle change -> update preview
   document.getElementById('toggle-exclude-abandoned').addEventListener('change', updateFilterPreview);
 }
 
@@ -613,7 +599,6 @@ function renderStatusChart(summary) {
   const ctx = document.getElementById('chart-status').getContext('2d');
   const { finished_books: fin, reading_books: rdg, abandoned_books: abn } = summary;
 
-  // Build only non-zero entries
   const entries = [
     { label: 'Concluídos', value: fin, color: 'rgba(74,222,128,0.8)', border: 'rgba(74,222,128,0.4)' },
     { label: 'Lendo',      value: rdg, color: 'rgba(91,156,245,0.8)', border: 'rgba(91,156,245,0.4)' },
@@ -621,7 +606,6 @@ function renderStatusChart(summary) {
   ].filter(e => e.value > 0);
 
   if (!entries.length) {
-    // Fallback: nothing to show
     state.charts.status = new Chart(ctx, {
       type: 'doughnut',
       data: { labels: ['Sem dados'], datasets: [{ data: [1], backgroundColor: ['rgba(70,84,106,0.2)'], borderWidth: 0 }] },
@@ -754,6 +738,11 @@ function renderHeatmap(cells) {
     `<strong>${yearDays}</strong> dias de leitura no último ano`;
   document.getElementById('hm-stat-30d').innerHTML =
     `<strong>${hours30d.toFixed(1)}h</strong> lidas nos últimos 30 dias`;
+
+  requestAnimationFrame(() => {
+    const scrollWrap = document.querySelector('.heatmap-scroll');
+    if (scrollWrap) scrollWrap.scrollLeft = scrollWrap.scrollWidth;
+  });
 }
 
 function buildTop10Markup(listType, data) {
@@ -855,7 +844,6 @@ function renderKPIs(summary, insights) {
   document.getElementById('desc-max-streak').textContent =
     `Recorde: ${fmt(insights.max_streak)} dias`;
 
-  // Update filter banner
   const fi = state._lastFilterInfo || {};
   const banner = document.getElementById('filter-banner');
   const bannerText = document.getElementById('filter-banner-text');
@@ -996,7 +984,6 @@ async function fetchStats() {
   setStatus('loading', 'Carregando…');
 
   try {
-    // Build filter param
     const filtersObj = buildFiltersJSON(settings);
     let url = API.stats;
     if (filtersObj) {
@@ -1032,11 +1019,9 @@ async function fetchStats() {
 
     const { summary, insights, charts, heatmap, top_authors, books, filter_info } = data;
 
-    // Store for preview computation
     lastFetchData = data;
     state._lastFilterInfo = filter_info || {};
 
-    // Store and render
     state.books       = books;
     state.monthlyData = charts.monthly;
     state.monthPage   = Math.max(0, Math.ceil(charts.monthly.length / state.MONTH_PAGE_SZ) - 1);
