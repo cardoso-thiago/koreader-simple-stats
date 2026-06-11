@@ -3,8 +3,9 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 const API = {
-  stats:  '/api/stats',
-  status: '/api/status',
+  stats:   '/api/stats',
+  status:  '/api/status',
+  settings:'/api/settings',
 };
 
 /* ── State ─────────────────────────────────────────────────────────────── */
@@ -21,9 +22,10 @@ let state = {
   lastDbMtime:   0,
   charts:        {},
   topLists:      {},
+  topListMarkup: {},
 };
 
-/* ── Settings (persisted in localStorage) ──────────────────────────────── */
+/* ── Settings (server-side, with local cache fallback) ────────────────── */
 const ACCENT_PRESETS = [
   { name: 'Âmbar',   hex: '#d4a853' },
   { name: 'Azul',    hex: '#5b9cf5' },
@@ -34,36 +36,98 @@ const ACCENT_PRESETS = [
   { name: 'Laranja', hex: '#fb923c' },
 ];
 
-const SETTINGS_KEY = 'koreader_settings';
-
-let settings = {
-  accent:           null,        // null = default amber
+const SETTINGS_CACHE_KEY = 'koreader_settings_cache_v2';
+const FILTER_OPS = ['contains', 'equals', 'starts_with', 'ends_with'];
+const DEFAULT_SETTINGS = {
+  accent: null,
   excludeAbandoned: false,
-  titleFilters:     [],          // [{op, val}, …]
-  authorFilters:    [],
+  titleFilters: [],
+  authorFilters: [],
 };
 
-let settingsDraft = {};          // working copy while dialog is open
+let settings = { ...DEFAULT_SETTINGS };
 
+let settingsDraft = {};          // working copy while dialog is open
 let lastFetchData  = null;       // raw API response for preview computation
 
-/* ── Settings persistence ──────────────────────────────────────────────── */
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s.accent !== undefined)           settings.accent           = s.accent;
-      if (s.excludeAbandoned !== undefined) settings.excludeAbandoned = s.excludeAbandoned;
-      if (Array.isArray(s.titleFilters))    settings.titleFilters     = s.titleFilters;
-      if (Array.isArray(s.authorFilters))   settings.authorFilters    = s.authorFilters;
-    }
-  } catch (_) { /* ignore corrupt data */ }
+function normalizeFilterList(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      op: FILTER_OPS.includes(item.op) ? item.op : 'contains',
+      val: (item.val || '').trim(),
+    }))
+    .filter(item => item.val.length > 0);
 }
 
-function saveSettings() {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-  catch (_) {}
+function normalizeSettings(raw) {
+  const merged = { ...DEFAULT_SETTINGS };
+  if (!raw || typeof raw !== 'object') return merged;
+
+  if (raw.accent == null || raw.accent === '') {
+    merged.accent = null;
+  } else if (typeof raw.accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw.accent)) {
+    merged.accent = raw.accent.toLowerCase();
+  }
+
+  merged.excludeAbandoned = Boolean(raw.excludeAbandoned);
+  merged.titleFilters = normalizeFilterList(raw.titleFilters);
+  merged.authorFilters = normalizeFilterList(raw.authorFilters);
+  return merged;
+}
+
+function loadSettingsCache() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return;
+    settings = normalizeSettings(JSON.parse(raw));
+  } catch (_) {
+    // Ignore corrupt cache and continue with defaults.
+  }
+}
+
+function saveSettingsCache(nextSettings = settings) {
+  try {
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(normalizeSettings(nextSettings)));
+  } catch (_) {
+    // Ignore cache write failures.
+  }
+}
+
+async function loadSettings() {
+  loadSettingsCache();
+
+  try {
+    const res = await fetch(API.settings);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    settings = normalizeSettings(await res.json());
+    saveSettingsCache(settings);
+  } catch (_) {
+    // Keep local cache/defaults if the server settings endpoint is unavailable.
+  }
+}
+
+async function saveSettings(nextSettings) {
+  const normalized = normalizeSettings(nextSettings);
+  settings = normalized;
+  saveSettingsCache(normalized);
+
+  try {
+    const res = await fetch(API.settings, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(normalized),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const saved = normalizeSettings(await res.json());
+    settings = saved;
+    saveSettingsCache(saved);
+    return saved;
+  } catch (err) {
+    console.warn('Não foi possível sincronizar settings com o backend:', err);
+    return normalized;
+  }
 }
 
 /* ── Accent colour ─────────────────────────────────────────────────────── */
@@ -268,19 +332,21 @@ function closeSettings() {
   applyAccent(settings.accent);
 }
 
-function applySettings() {
+async function applySettings() {
   const draft = readFilterDraft();
 
   // Accent
-  settings.accent = draft.accent;
-  applyAccent(settings.accent);
+  const nextSettings = {
+    ...settings,
+    accent: draft.accent,
+    excludeAbandoned: draft.excludeAbandoned,
+    titleFilters: draft.titleFilters,
+    authorFilters: draft.authorFilters,
+  };
 
-  // Other
-  settings.excludeAbandoned = draft.excludeAbandoned;
-  settings.titleFilters     = draft.titleFilters;
-  settings.authorFilters    = draft.authorFilters;
+  applyAccent(nextSettings.accent);
+  void saveSettings(nextSettings);
 
-  saveSettings();
   closeSettings();
   fetchStats();   // re-fetch with new filters
 }
@@ -641,30 +707,25 @@ function renderHeatmap(cells) {
   grid.innerHTML = '';
   months.innerHTML = '';
 
-  const CELL = 13;
-  let monthCols = {};
-  cells.forEach((cell, i) => {
-    const col = Math.floor(i / 7);
-    const mo  = cell.date.slice(0, 7);
-    if (!monthCols[mo]) monthCols[mo] = { start: col, end: col };
-    else monthCols[mo].end = col;
+  const cols = Math.ceil(cells.length / 7) || 53;
+  grid.style.setProperty('--heatmap-cols', cols);
+  months.style.setProperty('--heatmap-cols', cols);
+
+  const monthOrder = [];
+  let prevMonth = '';
+  cells.forEach(cell => {
+    const mo = cell.date.slice(0, 7);
+    if (mo !== prevMonth) {
+      monthOrder.push(mo);
+      prevMonth = mo;
+    }
   });
 
-  let prevEnd = -1;
-  Object.entries(monthCols).forEach(([mo, { start, end }]) => {
-    if (start <= prevEnd) start = prevEnd + 1;
-    const gap = start - (prevEnd + 1);
-    if (gap > 0) {
-      const spacer = document.createElement('span');
-      spacer.style.minWidth = `${gap * CELL}px`;
-      months.appendChild(spacer);
-    }
+  monthOrder.forEach(mo => {
     const label = document.createElement('span');
     const dt = new Date(mo + '-01');
     label.textContent = dt.toLocaleString('pt-BR', { month: 'short' });
-    label.style.minWidth = `${(end - start + 1) * CELL}px`;
     months.appendChild(label);
-    prevEnd = end;
   });
 
   cells.forEach(cell => {
@@ -692,6 +753,29 @@ function renderHeatmap(cells) {
     `<strong>${yearDays}</strong> dias de leitura no último ano`;
   document.getElementById('hm-stat-30d').innerHTML =
     `<strong>${hours30d.toFixed(1)}h</strong> lidas nos últimos 30 dias`;
+}
+
+function buildTop10Markup(listType, data) {
+  if (!data || !data.length) {
+    return '<p class="dialog-empty">Nenhum dado disponível.</p>';
+  }
+
+  return data.map(item => {
+    let label = '';
+    switch (listType) {
+      case 'longest':
+        label = `${fmt(item.pages)} páginas`;
+        break;
+      case 'mostTime':
+        label = `${item.hours}h`;
+        break;
+      case 'fastest':
+      case 'slowest':
+        label = `${item.speed_pages_hour} pág/h`;
+        break;
+    }
+    return `<div class="dialog-item"><span>${esc(item.title)} - ${esc(item.author)}</span><span>${label}</span></div>`;
+  }).join('');
 }
 
 /* ── Authors list ──────────────────────────────────────────────────────── */
@@ -948,6 +1032,12 @@ async function fetchStats() {
         fastest: insights.top10_fastest || [],
         slowest: insights.top10_slowest || []
     };
+    state.topListMarkup = {
+      longest: buildTop10Markup('longest', state.topLists.longest),
+      mostTime: buildTop10Markup('mostTime', state.topLists.mostTime),
+      fastest: buildTop10Markup('fastest', state.topLists.fastest),
+      slowest: buildTop10Markup('slowest', state.topLists.slowest),
+    };
 
     renderKPIs(summary, insights);
     renderInsights(insights);
@@ -959,10 +1049,6 @@ async function fetchStats() {
     renderStatusChart(summary);
     renderSizeChart(charts.size_distribution);
 
-    state.filter      = 'all';
-    state.searchQuery = '';
-    state.sortCol     = null;
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
     applyBookFilters();
     updateAbandonedTab();
 
@@ -1011,41 +1097,20 @@ function showTop10List(listType) {
     };
 
     titleEl.textContent = titles[listType] || 'Top 10';
-
-    let data = [];
-    switch(listType) {
-        case 'longest':  data = state.topLists.longest; break;
-        case 'mostTime': data = state.topLists.mostTime; break;
-        case 'fastest':  data = state.topLists.fastest; break;
-        case 'slowest':  data = state.topLists.slowest; break;
-    }
-
-    if (data.length === 0) {
-        listEl.innerHTML = '<p class="dialog-empty">Nenhum dado disponível.</p>';
-    } else {
-        listEl.innerHTML = data.map((item, index) => {
-            let label = '';
-            switch(listType) {
-                case 'longest':  label = `${fmt(item.pages)} páginas`; break;
-                case 'mostTime': label = `${item.hours}h`; break;
-                case 'fastest':  label = `${item.speed_pages_hour} pág/h`; break;
-                case 'slowest':  label = `${item.speed_pages_hour} pág/h`; break;
-            }
-            return `<div class="dialog-item"><span>${item.title} - ${item.author}</span><span>${label}</span></div>`;
-        }).join('');
-    }
-
+    listEl.innerHTML = state.topListMarkup[listType] || '<p class="dialog-empty">Nenhum dado disponível.</p>';
+    document.body.classList.add('overlay-open');
     dialog.classList.add('visible');
 }
 
 function hideTop10List() {
     document.getElementById('top10-dialog').classList.remove('visible');
+    document.body.classList.remove('overlay-open');
 }
 
 /* ── Init ──────────────────────────────────────────────────────────────── */
-function init() {
+async function init() {
   // Load persistent settings
-  loadSettings();
+  await loadSettings();
   applyAccent(settings.accent);
 
   // Init UI

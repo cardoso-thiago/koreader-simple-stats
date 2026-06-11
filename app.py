@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """KOReader Estante - Backend"""
-import os, sys, json, sqlite3, datetime, urllib.parse
+import os, sys, json, sqlite3, datetime, urllib.parse, tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DB_PATH = os.environ.get("DB_PATH", "statistics.sqlite3")
@@ -9,6 +9,18 @@ HOST    = "0.0.0.0"
 TZ_H    = int(os.environ.get("TZ_OFFSET_HOURS", "-3"))
 TZ_OFF  = datetime.timezone(datetime.timedelta(hours=TZ_H))
 TZ_SQL  = f"+{TZ_H:02d}:00" if TZ_H >= 0 else f"-{abs(TZ_H):02d}:00"
+SETTINGS_PATH = os.environ.get(
+    "SETTINGS_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "settings.json"),
+)
+
+DEFAULT_SETTINGS = {
+    "accent": None,
+    "excludeAbandoned": False,
+    "titleFilters": [],
+    "authorFilters": [],
+}
+VALID_FILTER_OPS = {"contains", "equals", "starts_with", "ends_with"}
 
 MIME = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",
         ".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",
@@ -26,6 +38,61 @@ def fmt_author(raw):
 def get_db_status():
     if not os.path.exists(DB_PATH): return {"exists":False,"modified":0,"size":0}
     st=os.stat(DB_PATH); return {"exists":True,"modified":st.st_mtime,"size":st.st_size}
+
+def _normalize_filter_list(items):
+    out = []
+    if not isinstance(items, list):
+        return out
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        op = item.get("op", "contains")
+        val = str(item.get("val", "")).strip()
+        if op not in VALID_FILTER_OPS or not val:
+            continue
+        out.append({"op": op, "val": val})
+    return out
+
+def _normalize_settings(raw):
+    s = dict(DEFAULT_SETTINGS)
+    if not isinstance(raw, dict):
+        return s
+
+    accent = raw.get("accent", None)
+    if accent in (None, ""):
+        s["accent"] = None
+    elif isinstance(accent, str) and len(accent) == 7 and accent.startswith("#"):
+        s["accent"] = accent.lower()
+
+    s["excludeAbandoned"] = bool(raw.get("excludeAbandoned", False))
+    s["titleFilters"] = _normalize_filter_list(raw.get("titleFilters", []))
+    s["authorFilters"] = _normalize_filter_list(raw.get("authorFilters", []))
+    return s
+
+def load_settings():
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as fh:
+            return _normalize_settings(json.load(fh))
+    except Exception:
+        return dict(DEFAULT_SETTINGS)
+
+def save_settings(settings):
+    payload = json.dumps(_normalize_settings(settings), ensure_ascii=False, indent=2, sort_keys=True)
+    settings_dir = os.path.dirname(SETTINGS_PATH)
+    if settings_dir:
+        os.makedirs(settings_dir, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".settings.", dir=settings_dir or None)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+            fh.write("\n")
+        os.replace(tmp_path, SETTINGS_PATH)
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        except OSError:
+            pass
 
 # ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -377,6 +444,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin","*"); self.send_header("Cache-Control","no-store")
         self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        raw = self.rfile.read(length) if length > 0 else b"{}"
+        return json.loads(raw.decode("utf-8") or "{}")
     def do_GET(self):
         parsed=urllib.parse.urlparse(self.path)
         path=parsed.path
@@ -384,6 +455,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if path=="/api/status":
             self.send_json(get_db_status()); return
+
+        if path=="/api/settings":
+            self.send_json(load_settings()); return
 
         if path=="/api/stats":
             filters_raw = qs.get("filters", [None])[0]
@@ -400,6 +474,26 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers(); self.wfile.write(content)
             except Exception as e: self.send_error(500,str(e))
         else: self.send_error(404)
+    def do_POST(self):
+        parsed=urllib.parse.urlparse(self.path)
+        if parsed.path != "/api/settings":
+            self.send_error(404)
+            return
+        try:
+            incoming = self._read_json_body()
+        except Exception as exc:
+            self.send_json({"error": f"JSON inválido: {exc}"}, status=400)
+            return
+
+        current = load_settings()
+        current.update(incoming if isinstance(incoming, dict) else {})
+        normalized = _normalize_settings(current)
+        try:
+            save_settings(normalized)
+        except Exception as exc:
+            self.send_json({"error": f"Falha ao salvar settings: {exc}"}, status=500)
+            return
+        self.send_json(normalized)
 
 def run():
     print(f"{'─'*52}\n  KOReader Estante · http://localhost:{PORT}")
