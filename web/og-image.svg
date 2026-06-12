@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#090c10"/>
+  <circle cx="980" cy="120" r="250" fill="#c9a45e" fill-opacity=".08"/>
+  <circle cx="180" cy="500" r="220" fill="#729cd6" fill-opacity=".08"/>
+  <rect x="72" y="72" width="1056" height="486" rx="36" fill="#0f131a" stroke="#273042" stroke-width="2"/>
+  <text x="110" y="178" fill="#edf2f7" font-size="74" font-family="Fraunces, Georgia, serif" font-weight="600" letter-spacing="-3">KOReader · Estante</text>
+  <text x="110" y="246" fill="#c9a45e" font-size="28" font-family="Manrope, Arial, sans-serif" font-weight="700" letter-spacing="2">ESTATÍSTICAS DE LEITURA</text>
+  <text x="110" y="316" fill="#9aa8bb" font-size="30" font-family="Manrope, Arial, sans-serif">Biblioteca, ritmo e padrões em um painel escuro editorial.</text>
+  <rect x="110" y="388" width="290" height="126" rx="22" fill="#151a23" stroke="#2b3445"/>
+  <rect x="424" y="388" width="290" height="126" rx="22" fill="#151a23" stroke="#2b3445"/>
+  <rect x="738" y="388" width="290" height="126" rx="22" fill="#151a23" stroke="#2b3445"/>
+  <path d="M142 426h72v10h-72zm0 28h120v10H142zm0 28h92v10h-92z" fill="#c9a45e" fill-opacity=".9"/>
+  <path d="M456 426h72v10h-72zm0 28h144v10H456zm0 28h108v10H456z" fill="#729cd6" fill-opacity=".9"/>
+  <path d="M770 426h72v10h-72zm0 28h112v10H770zm0 28h80v10h-80z" fill="#9f8dd7" fill-opacity=".9"/>
+</svg>

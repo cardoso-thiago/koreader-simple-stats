@@ -430,32 +430,40 @@ function setStatus(type, label) {
   badge.querySelector('.badge-label').textContent = label;
 }
 
+function setLoadingState(isLoading) {
+  const loading = document.getElementById('loading-state');
+  const dashboard = document.getElementById('dashboard');
+  loading.classList.toggle('hidden', !isLoading);
+  dashboard.classList.toggle('hidden', isLoading);
+  document.body.classList.toggle('is-loading', isLoading);
+}
+
 /* ── Chart defaults ────────────────────────────────────────────────────── */
 const CHART_DEFAULTS = {
-  font: { family: "'JetBrains Mono', monospace", size: 11 },
-  color: '#46546a',
+  font: { family: "'Manrope', -apple-system, BlinkMacSystemFont, sans-serif", size: 11 },
+  color: '#607086',
 };
 Chart.defaults.color = CHART_DEFAULTS.color;
 Chart.defaults.font  = CHART_DEFAULTS.font;
 
 function baseTooltip() {
   return {
-    backgroundColor: '#1a2030',
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#171d28',
+    borderColor: 'rgba(226,232,240,0.12)',
     borderWidth: 1,
-    titleColor: '#f0f4f8',
-    bodyColor: '#8898b4',
+    titleColor: '#edf2f7',
+    bodyColor: '#9aa8bb',
     padding: 10,
-    cornerRadius: 6,
-    titleFont: { family: "'DM Sans', sans-serif", size: 12, weight: '600' },
+    cornerRadius: 8,
+    titleFont: { family: "'Manrope', sans-serif", size: 12, weight: '600' },
     bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
   };
 }
 function baseGrid() {
-  return { color: 'rgba(255,255,255,0.04)', drawBorder: false };
+  return { color: 'rgba(226,232,240,0.05)', drawBorder: false };
 }
 function baseTick() {
-  return { color: '#46546a', font: { size: 10 } };
+  return { color: '#607086', font: { size: 10 } };
 }
 
 function destroyChart(key) {
@@ -982,6 +990,7 @@ async function fetchStats() {
   const btn = document.getElementById('btn-refresh');
   btn.classList.add('spinning');
   setStatus('loading', 'Carregando…');
+  setLoadingState(true);
 
   try {
     const filtersObj = buildFiltersJSON(settings);
@@ -1000,6 +1009,7 @@ async function fetchStats() {
     if (res.status === 304) {
       setStatus('ok', 'Banco OK');
       btn.classList.remove('spinning');
+      setLoadingState(false);
       return;
     }
 
@@ -1010,12 +1020,14 @@ async function fetchStats() {
       document.getElementById('error-banner').classList.remove('hidden');
       document.getElementById('error-msg').textContent = data.error;
       document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('loading-state').classList.add('hidden');
       setStatus('err', 'Erro');
       return;
     }
 
     document.getElementById('error-banner').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('loading-state').classList.add('hidden');
 
     const { summary, insights, charts, heatmap, top_authors, books, filter_info } = data;
 
@@ -1061,8 +1073,10 @@ async function fetchStats() {
   } catch (err) {
     console.error(err);
     setStatus('err', 'Sem conexão');
+    document.getElementById('loading-state').classList.add('hidden');
   } finally {
     btn.classList.remove('spinning');
+    setLoadingState(false);
   }
 }
 
@@ -1127,6 +1141,7 @@ async function init() {
       if (e.target === e.currentTarget) hideTop10List();
   });
 
+  setLoadingState(true);
   fetchStats();
   setInterval(checkDbStatus, 15_000);
 }

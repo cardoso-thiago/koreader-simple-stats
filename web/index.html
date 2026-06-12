@@ -4,13 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KOReader · Estante</title>
+  <meta name="description" content="Painel com estatísticas de leitura do KOReader, com visão de biblioteca, hábitos, calendário e detalhes por livro.">
+  <meta name="theme-color" content="#0b0f14">
+  <meta property="og:title" content="KOReader · Estante">
+  <meta property="og:description" content="Acompanhe sua biblioteca, ritmo de leitura e padrões ao longo do tempo.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="og-image.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="skip-link" href="#dashboard">Pular para o conteúdo</a>
 <div id="app">
 
   <header class="header">
@@ -45,6 +54,25 @@
     </div>
   </header>
 
+  <section id="loading-state" class="loading-state" aria-live="polite">
+    <div class="loading-hero">
+      <div class="loading-kicker">Carregando estatísticas</div>
+      <div class="loading-title">Estamos montando sua leitura em camadas.</div>
+      <p class="loading-copy">Buscando livros, hábitos e gráficos. Se o banco estiver grande, isso pode levar alguns segundos.</p>
+    </div>
+    <div class="loading-grid">
+      <div class="loading-card skeleton-block"></div>
+      <div class="loading-card skeleton-block"></div>
+      <div class="loading-card skeleton-block"></div>
+      <div class="loading-card skeleton-block"></div>
+    </div>
+    <div class="loading-grid loading-grid--wide">
+      <div class="loading-panel skeleton-block"></div>
+      <div class="loading-panel skeleton-block"></div>
+      <div class="loading-panel skeleton-block"></div>
+    </div>
+  </section>
+
   <div id="error-banner" class="error-banner hidden">
     <div class="error-banner__icon">⚠</div>
     <div><strong>Banco de Dados Não Encontrado</strong>
@@ -56,7 +84,7 @@
     <span id="filter-banner-text">Filtros ativos</span>
   </div>
 
-  <main id="dashboard" class="dashboard hidden">
+  <main id="dashboard" class="dashboard hidden" tabindex="-1">
 
     <!-- KPI GRID -->
     <section class="kpi-grid">
@@ -144,7 +172,7 @@
             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
             <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
-          Calendário de Leitura
+          Calendário de leitura
         </h2>
         <div class="heatmap-legend">
           <span class="legend-label">Menos</span>
@@ -225,7 +253,7 @@
     <div class="charts-grid">
       <div class="chart-card">
         <div class="chart-card-header">
-          <h3>Atividade Mensal</h3>
+          <h3>Atividade mensal</h3>
           <div class="chart-nav">
             <button id="btn-prev-month" class="chart-nav-btn" title="Período anterior">←</button>
             <span id="label-month-page" class="chart-nav-label">1 / 1</span>
@@ -235,27 +263,27 @@
         <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
       </div>
       <div class="chart-card">
-        <div class="chart-card-header"><h3>Horário de Leitura</h3></div>
+        <div class="chart-card-header"><h3>Horário de leitura</h3></div>
         <div class="chart-wrap"><canvas id="chart-hourly"></canvas></div>
       </div>
       <div class="chart-card">
-        <div class="chart-card-header"><h3>Hábitos por Dia da Semana</h3></div>
+        <div class="chart-card-header"><h3>Hábitos por dia da semana</h3></div>
         <div class="chart-wrap"><canvas id="chart-weekly"></canvas></div>
       </div>
       <div class="chart-card chart-card--donut">
-        <div class="chart-card-header"><h3>Status da Biblioteca</h3></div>
+        <div class="chart-card-header"><h3>Status da biblioteca</h3></div>
         <div class="chart-wrap chart-wrap--donut"><canvas id="chart-status"></canvas></div>
       </div>
       <div class="chart-card">
         <div class="chart-card-header">
-          <h3>Distribuição por Tamanho</h3>
+          <h3>Distribuição por tamanho</h3>
           <span class="chart-sub">páginas por livro</span>
         </div>
         <div class="chart-wrap"><canvas id="chart-size"></canvas></div>
       </div>
       <div class="chart-card">
         <div class="chart-card-header">
-          <h3>Top 10 Autores</h3>
+          <h3>Top 10 autores</h3>
           <span class="chart-sub">por tempo de leitura</span>
         </div>
         <div class="authors-list" id="top-authors-list"></div>
@@ -272,7 +300,7 @@
             <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
             <line x1="3" y1="18" x2="3.01" y2="18"/>
           </svg>
-          Todos os Livros
+          Todos os livros
         </h2>
         <div class="books-controls">
           <div class="search-wrap">
@@ -322,7 +350,7 @@
   <div id="settings-dialog" class="settings-dialog">
     <div class="settings-content">
       <div class="settings-header">
-        <h2>⚙ Configurações</h2>
+          <h2>⚙ Configurações</h2>
         <button id="settings-close" class="settings-close" aria-label="Fechar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -338,7 +366,7 @@
 
         <!-- ── Accent Colour ─────────────────────────────────────────── -->
         <div class="setting-section">
-          <div class="setting-section-title">Cor de Destaque</div>
+          <div class="setting-section-title">Cor de destaque</div>
           <div id="accent-picker" class="accent-picker">
             <!-- Swatches injected by JS -->
           </div>
@@ -361,7 +389,7 @@
 
         <!-- ── Title Filters ─────────────────────────────────────────── -->
         <div class="setting-section">
-          <div class="setting-section-title">Filtro de Títulos</div>
+          <div class="setting-section-title">Filtro de títulos</div>
           <div class="filter-group">
             <div id="title-filter-list" class="filter-list"></div>
             <button id="title-filter-add" class="filter-add-btn">+ Adicionar filtro de título</button>
@@ -370,7 +398,7 @@
 
         <!-- ── Author Filters ────────────────────────────────────────── -->
         <div class="setting-section">
-          <div class="setting-section-title">Filtro de Autores</div>
+          <div class="setting-section-title">Filtro de autores</div>
           <div class="filter-group">
             <div id="author-filter-list" class="filter-list"></div>
             <button id="author-filter-add" class="filter-add-btn">+ Adicionar filtro de autor</button>
