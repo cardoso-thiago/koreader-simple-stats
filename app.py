@@ -327,9 +327,10 @@ def get_statistics(raw_filters=None):
             ep = b["effective_pages"]
             ko = b["pages"]
             b["progress"]=round(min(100.0,b["read_pages"]/ko*100 if ko>0 else 0),1)
-            # Speed: use estimated pages read (capped at effective_pages when real_pages available)
+            # Speed: estimated pages read based on completion ratio × effective pages
             if b["has_real_pages"]:
-                speed_pages = min(b["read_pages"], ep)
+                ratio = min(1.0, b["read_pages"] / ko) if ko > 0 else 0
+                speed_pages = ratio * ep
             else:
                 speed_pages = b["read_pages"]
             b["speed"]=round(speed_pages/(b["read_time"]/3600.0),1) if b["read_time"]>0 else 0.0
@@ -423,7 +424,7 @@ def get_statistics(raw_filters=None):
         nr=sum(1 for b in books if b["status"]=="reading")
         na=sum(1 for b in books if b["status"]=="abandoned")
         ts=sum(b["read_time"] for b in books)
-        tp=sum(min(b["read_pages"], b["effective_pages"]) if b["has_real_pages"] else b["read_pages"] for b in books)
+        tp=sum((min(1.0,b["read_pages"]/b["pages"])*b["effective_pages"]) if b["has_real_pages"] and b["pages"]>0 else b["read_pages"] for b in books)
         th=sum(b["highlights"] for b in books); tn=sum(b["notes"] for b in books)
         spd=round(tp/(ts/3600.0),1) if ts>0 else 0.0
         d30=today-datetime.timedelta(days=30)
