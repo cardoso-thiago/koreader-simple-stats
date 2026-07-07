@@ -522,7 +522,7 @@ def get_statistics(raw_filters=None):
         def snap(b,ek,ev): return {"title":b["title"],"author":b["author"],ek:ev}
         lng=mt=fb=sb={"title":"N/A","author":"N/A"}
         if books:
-            lb=max(books,key=lambda x:x["pages"]); lng=snap(lb,"pages",lb["pages"])
+            lb=max(books,key=lambda x:x["effective_pages"]); lng=snap(lb,"pages",lb["effective_pages"])
             mb=max(books,key=lambda x:x["read_time"]); mt=snap(mb,"hours",round(mb["read_time"]/3600.0,1))
             el=[b for b in books if b["read_pages"]>=50 and b["read_time"]>0]
             if el:
@@ -532,7 +532,7 @@ def get_statistics(raw_filters=None):
         def book_snap(b, extra_key, extra_val):
             return {"title":b["title"],"author":b["author"],extra_key:extra_val}
 
-        top10_longest=sorted([book_snap(b,"pages",b["pages"]) for b in books],key=lambda x:x["pages"],reverse=True)[:10]
+        top10_longest=sorted([book_snap(b,"pages",b["effective_pages"]) for b in books],key=lambda x:x["pages"],reverse=True)[:10]
         top10_most_time=sorted([book_snap(b,"hours",round(b["read_time"]/3600.0,1)) for b in books],key=lambda x:x["hours"],reverse=True)[:10]
         el=[b for b in books if b["read_pages"]>=50 and b["read_time"]>0]
         top10_fastest=sorted([book_snap(b,"speed_pages_hour",b["speed"]) for b in el],key=lambda x:x["speed_pages_hour"],reverse=True)[:10]
