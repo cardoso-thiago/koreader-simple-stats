@@ -250,8 +250,10 @@ _stats_cache = {}
 _stats_cache_lock = threading.Lock()
 _CACHE_MAX_ENTRIES = 20
 
+STATS_CACHE_VERSION = "2"
+
 def _cache_key(filters_raw, db_mtime):
-    raw = f"f:{filters_raw or ''}|m:{db_mtime}"
+    raw = f"v:{STATS_CACHE_VERSION}|f:{filters_raw or ''}|m:{db_mtime}"
     return hashlib.md5(raw.encode()).hexdigest()
 
 def _check_stats_cache(filters_raw):
@@ -323,7 +325,8 @@ def get_statistics(raw_filters=None):
 
         for b in books:
             ep = b["effective_pages"]
-            b["progress"]=round(min(100.0,b["read_pages"]/ep*100 if ep>0 else 0),1)
+            ko = b["pages"]
+            b["progress"]=round(min(100.0,b["read_pages"]/ko*100 if ko>0 else 0),1)
             # Speed: use estimated pages read (capped at effective_pages when real_pages available)
             if b["has_real_pages"]:
                 speed_pages = min(b["read_pages"], ep)
@@ -399,12 +402,10 @@ def get_statistics(raw_filters=None):
             f"FROM page_stat_data WHERE start_time>0 ORDER BY 1")
         dates=[datetime.date.fromisoformat(r[0]) for r in c.fetchall()]
 
-        q_daily = _filter_sql(
+        c.execute(
             f"SELECT date(start_time,'unixepoch','{TZ_SQL}') AS d,"
-            f"ROUND(SUM(duration)/3600.0,3) FROM page_stat_data WHERE start_time>0 "
-            f"GROUP BY d ORDER BY d",
-            ids_param)
-        c.execute(q_daily, params) if ids_param is not None else c.execute(q_daily)
+            f"ROUND(SUM(COALESCE(duration,0))/3600.0,3) FROM page_stat_data WHERE start_time>0 AND duration>0 "
+            f"GROUP BY d ORDER BY d")
         hm_raw={r[0]:r[1] for r in c.fetchall()}
 
         q_span = _filter_sql(
