@@ -337,7 +337,11 @@ def get_statistics(raw_filters=None):
 
         for b in books:
             mp,stp=pstats.get(b["id"],(0,0))
-            fin=(b["progress"]>=95 or ((mp/(stp or 1)>=0.95 or mp/(b["pages"] or 1)>=0.95) and b["progress"]>=50))
+            koreader_done = (mp/(stp or 1)>=0.95 or mp/(b["pages"] or 1)>=0.95)
+            if b["has_real_pages"]:
+                fin = koreader_done
+            else:
+                fin = (b["progress"]>=95 or (koreader_done and b["progress"]>=50))
             b["status"]="finished" if fin else ("reading" if b["last_open"]>=mx-30*86400 else "abandoned")
 
         # ── 2. Apply user filters ───────────────────────────────────────
