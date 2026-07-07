@@ -6,6 +6,7 @@ const API = {
   stats:   '/api/stats',
   status:  '/api/status',
   settings:'/api/settings',
+  realPages: '/api/real-pages',
 };
 
 /* ── State ─────────────────────────────────────────────────────────────── */
@@ -844,6 +845,9 @@ function renderKPIs(summary, insights) {
 
   animateValue(document.getElementById('val-reading-speed'), s.avg_speed_pages_hour, 800);
 
+  animateValue(document.getElementById('val-avg-wpm'), s.avg_wpm, 800);
+  document.getElementById('desc-wpm-profile').textContent = s.wpm_profile || '—';
+
   animateValue(document.getElementById('val-highlights'), s.total_highlights + s.total_notes);
   document.getElementById('desc-highlights-notes').textContent =
     `${fmt(s.total_highlights)} destaques · ${fmt(s.total_notes)} notas`;
@@ -902,6 +906,16 @@ function renderBooksTable() {
   tbody.innerHTML = list.map(b => {
     const pctFill = Math.min(100, b.progress);
     const pctColor = b.status === 'finished' ? '#4ade80' : b.status === 'reading' ? '#5b9cf5' : '#46546a';
+
+    let pagesDisplay;
+    if (b.has_real_pages && b.real_pages != null) {
+      pagesDisplay = `<span class="rp-indicator" title="Páginas reais via Hardcover">${fmt(b.real_pages)}</span>`;
+    } else if (b.pages > 0) {
+      pagesDisplay = `${fmt(b.pages)}<span class="rp-missing" title="Sem páginas reais — clique para buscar">*</span>`;
+    } else {
+      pagesDisplay = `<span class="rp-missing" title="Sem páginas reais — clique para buscar">—*</span>`;
+    }
+
     return `
     <tr>
       <td>
@@ -921,10 +935,11 @@ function renderBooksTable() {
           </div>
         </div>
       </td>
-      <td class="mono">${b.pages > 0 ? fmt(b.pages) : '—'}</td>
+      <td class="mono pages-cell" data-md5="${esc(b.md5 || '')}" data-title="${esc(b.title)}" data-author="${esc(b.author)}">${pagesDisplay}</td>
       <td class="mono">${b.reading_days > 0 ? fmt(b.reading_days) : '—'}</td>
       <td class="mono">${b.time_hours > 0 ? b.time_hours + 'h' : '—'}</td>
       <td class="mono">${b.speed_pages_hour > 0 ? b.speed_pages_hour + ' p/h' : '—'}</td>
+      <td class="mono">${b.wpm > 0 ? b.wpm + ' p/min' : '—'}</td>
       <td class="mono">${(b.highlights + b.notes) > 0 ? fmt(b.highlights + b.notes) : '—'}</td>
       <td class="mono">${esc(b.last_open)}</td>
     </tr>`;
@@ -1120,6 +1135,351 @@ function hideTop10List() {
     document.body.classList.remove('overlay-open');
 }
 
+/* ── Real Pages Dialog ──────────────────────────────────────────────────── */
+let rpCurrentBook = null;
+
+function openRealPagesDialog(bookMd5, bookTitle, bookAuthor) {
+  rpCurrentBook = { md5: bookMd5, title: bookTitle, author: bookAuthor };
+  const info = document.getElementById('realpages-book-info');
+  info.innerHTML = `<strong>${esc(bookTitle)}</strong><span class="rp-author">${esc(bookAuthor)}</span>`;
+  document.getElementById('realpages-search-input').value = bookTitle + (bookAuthor ? ' ' + bookAuthor : '');
+  document.getElementById('realpages-results').innerHTML = '';
+  document.getElementById('realpages-error').classList.add('hidden');
+  document.getElementById('realpages-loading').classList.add('hidden');
+  document.getElementById('realpages-manual-input').value = '';
+  document.getElementById('realpages-manual-btn').disabled = false;
+  document.getElementById('realpages-manual-btn').textContent = 'Salvar';
+  document.body.classList.add('overlay-open');
+  document.getElementById('realpages-dialog').classList.add('visible');
+  document.getElementById('realpages-search-input').focus();
+  document.getElementById('realpages-search-input').select();
+}
+
+function closeRealPagesDialog() {
+  document.getElementById('realpages-dialog').classList.remove('visible');
+  document.body.classList.remove('overlay-open');
+  rpCurrentBook = null;
+}
+
+async function searchRealPages() {
+  const input = document.getElementById('realpages-search-input');
+  const title = input.value.trim();
+  if (!title) return;
+  const author = rpCurrentBook?.author || '';
+
+  const loading = document.getElementById('realpages-loading');
+  const error = document.getElementById('realpages-error');
+  const results = document.getElementById('realpages-results');
+  error.classList.add('hidden');
+  results.innerHTML = '';
+  loading.classList.remove('hidden');
+
+  try {
+    const res = await fetch(API.realPages + '/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, author }),
+    });
+    const data = await res.json();
+    loading.classList.add('hidden');
+
+    if (data.error) {
+      error.textContent = 'Erro: ' + data.error;
+      error.classList.remove('hidden');
+      return;
+    }
+
+    if (!data.results || !data.results.length) {
+      results.innerHTML = '<p class="dialog-empty">Nenhum resultado encontrado.</p>';
+      return;
+    }
+
+    let html = '';
+    for (const book of data.results) {
+      html += `<div class="rp-book-group">`;
+      html += `<div class="rp-book-title">${esc(book.book_title)}</div>`;
+      if (book.authors && book.authors.length) {
+        html += `<div class="rp-book-authors">${esc(book.authors.join(', '))}</div>`;
+      }
+      html += `<div class="rp-editions">`;
+      for (const ed of book.editions) {
+        const pages = ed.pages != null ? `${ed.pages} páginas` : 'páginas não informadas';
+        const lang = ed.language ? ` · ${ed.language}` : '';
+        const fmtInfo = ed.format ? `${ed.format}` : '';
+        html += `
+          <div class="rp-edition">
+            <div class="rp-edition-info">
+              <span class="rp-edition-pages">${pages}</span>
+              <span class="rp-edition-meta">${esc(fmtInfo)}${lang}</span>
+              ${ed.isbn_13 ? `<span class="rp-edition-isbn">ISBN: ${ed.isbn_13}</span>` : ''}
+            </div>
+            <button class="rp-select-btn" data-pages="${ed.pages != null ? ed.pages : ''}" data-edition-id="${esc(ed.id)}" data-book-id="${esc(book.book_id)}">Selecionar</button>
+          </div>`;
+      }
+      html += `</div></div>`;
+    }
+    results.innerHTML = html;
+
+    // Add click handlers for select buttons
+    results.querySelectorAll('.rp-select-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pages = btn.dataset.pages;
+        if (!pages) {
+          error.textContent = 'Esta edição não tem número de páginas.';
+          error.classList.remove('hidden');
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Salvando…';
+        const saveRes = await fetch(API.realPages + '/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            md5: rpCurrentBook.md5,
+            pages: parseInt(pages),
+            title: rpCurrentBook.title,
+            author: rpCurrentBook.author,
+            edition_id: btn.dataset.editionId,
+            book_id: btn.dataset.bookId,
+          }),
+        });
+        const saveData = await saveRes.json();
+        if (saveData.ok) {
+          closeRealPagesDialog();
+          fetchStats();
+        } else {
+          error.textContent = 'Erro ao salvar: ' + (saveData.error || 'desconhecido');
+          error.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'Selecionar';
+        }
+      });
+    });
+  } catch (err) {
+    loading.classList.add('hidden');
+    error.textContent = 'Erro de conexão: ' + err.message;
+    error.classList.remove('hidden');
+  }
+}
+
+function initRealPagesDialog() {
+  document.getElementById('realpages-close').addEventListener('click', closeRealPagesDialog);
+  document.getElementById('realpages-cancel').addEventListener('click', closeRealPagesDialog);
+  document.getElementById('realpages-dialog').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeRealPagesDialog();
+  });
+  document.getElementById('realpages-search-btn').addEventListener('click', searchRealPages);
+  document.getElementById('realpages-search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchRealPages();
+  });
+
+  // Manual save
+  document.getElementById('realpages-manual-btn').addEventListener('click', async () => {
+    const input = document.getElementById('realpages-manual-input');
+    const pages = parseInt(input.value);
+    if (!pages || pages < 1) {
+      document.getElementById('realpages-error').textContent = 'Informe um número válido de páginas.';
+      document.getElementById('realpages-error').classList.remove('hidden');
+      return;
+    }
+    if (!rpCurrentBook) return;
+    const btn = document.getElementById('realpages-manual-btn');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    const res = await fetch(API.realPages + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        md5: rpCurrentBook.md5,
+        pages,
+        title: rpCurrentBook.title,
+        author: rpCurrentBook.author,
+        edition_id: '',
+        book_id: '',
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closeRealPagesDialog();
+      fetchStats();
+    } else {
+      document.getElementById('realpages-error').textContent = 'Erro ao salvar: ' + (data.error || 'desconhecido');
+      document.getElementById('realpages-error').classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Salvar';
+    }
+  });
+  document.getElementById('realpages-manual-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('realpages-manual-btn').click();
+  });
+
+  // Delegate click on pages cells in the books table
+  document.getElementById('books-tbody').addEventListener('click', (e) => {
+    const cell = e.target.closest('.pages-cell');
+    if (!cell) return;
+    const md5 = cell.dataset.md5;
+    const title = cell.dataset.title;
+    const author = cell.dataset.author;
+    if (md5) {
+      openRealPagesDialog(md5, title, author);
+    }
+  });
+}
+
+/* ── Batch Real Pages Search (interactive) ────────────────────────────── */
+let batchQueue = [];
+let batchCurrentIdx = 0;
+
+function renderBatchEditions(results, onSelect) {
+  if (!results || !results.length) {
+    return '<p class="dialog-empty">Nenhum resultado encontrado no Hardcover.</p>';
+  }
+  let html = '';
+  for (const book of results) {
+    html += `<div class="rp-book-group">`;
+    html += `<div class="rp-book-title">${esc(book.book_title)}</div>`;
+    if (book.authors && book.authors.length) {
+      html += `<div class="rp-book-authors">${esc(book.authors.join(', '))}</div>`;
+    }
+    html += `<div class="rp-editions">`;
+    for (const ed of book.editions) {
+      const pages = ed.pages != null ? `${ed.pages} páginas` : 'páginas não informadas';
+      const lang = ed.language ? ` · ${ed.language}` : '';
+      const fmtInfo = ed.format ? `${ed.format}` : '';
+      html += `
+        <div class="rp-edition">
+          <div class="rp-edition-info">
+            <span class="rp-edition-pages">${pages}</span>
+            <span class="rp-edition-meta">${esc(fmtInfo)}${lang}</span>
+            ${ed.isbn_13 ? `<span class="rp-edition-isbn">ISBN: ${ed.isbn_13}</span>` : ''}
+          </div>
+          <button class="rp-select-btn batch-select-edition" data-pages="${ed.pages != null ? ed.pages : ''}" data-edition-id="${esc(ed.id)}" data-book-id="${esc(book.book_id)}">Selecionar</button>
+        </div>`;
+    }
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+async function batchLoadNext() {
+  if (batchCurrentIdx >= batchQueue.length) {
+    // Done
+    document.getElementById('batch-loading').classList.add('hidden');
+    document.getElementById('batch-results').innerHTML = '<p class="dialog-empty batch-done">Busca em lote concluída!</p>';
+    document.getElementById('batch-skip-btn').disabled = true;
+    document.getElementById('batch-progress').textContent = 'Concluído';
+    fetchStats();
+    return;
+  }
+
+  const book = batchQueue[batchCurrentIdx];
+  document.getElementById('batch-idx').textContent = batchCurrentIdx + 1;
+  document.getElementById('batch-total').textContent = batchQueue.length;
+  document.getElementById('batch-book-info').innerHTML =
+    `<strong>${esc(book.title)}</strong><span class="rp-author">${esc(book.author)}</span>`;
+  document.getElementById('batch-loading').classList.remove('hidden');
+  document.getElementById('batch-results').innerHTML = '';
+  document.getElementById('batch-error').classList.add('hidden');
+  document.getElementById('batch-skip-btn').disabled = false;
+
+  try {
+    const res = await fetch(API.realPages + '/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: book.title, author: book.author }),
+    });
+    const data = await res.json();
+    document.getElementById('batch-loading').classList.add('hidden');
+
+    if (data.error) {
+      document.getElementById('batch-error').textContent = 'Erro: ' + data.error;
+      document.getElementById('batch-error').classList.remove('hidden');
+      return;
+    }
+
+    const resultsEl = document.getElementById('batch-results');
+    resultsEl.innerHTML = renderBatchEditions(data.results);
+
+    // Attach click handlers
+    resultsEl.querySelectorAll('.batch-select-edition').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pages = btn.dataset.pages;
+        if (!pages) {
+          document.getElementById('batch-error').textContent = 'Esta edição não tem número de páginas.';
+          document.getElementById('batch-error').classList.remove('hidden');
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Salvando…';
+        const saveRes = await fetch(API.realPages + '/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            md5: book.md5,
+            pages: parseInt(pages),
+            title: book.title,
+            author: book.author,
+            edition_id: btn.dataset.editionId,
+            book_id: btn.dataset.bookId,
+          }),
+        });
+        const saveData = await saveRes.json();
+        if (saveData.ok) {
+          batchCurrentIdx++;
+          batchLoadNext();
+        } else {
+          document.getElementById('batch-error').textContent = 'Erro ao salvar: ' + (saveData.error || 'desconhecido');
+          document.getElementById('batch-error').classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'Selecionar';
+        }
+      });
+    });
+  } catch (err) {
+    document.getElementById('batch-loading').classList.add('hidden');
+    document.getElementById('batch-error').textContent = 'Erro de conexão: ' + err.message;
+    document.getElementById('batch-error').classList.remove('hidden');
+  }
+}
+
+function openBatchDialog() {
+  // Get books without real pages from current state
+  batchQueue = (state.books || []).filter(b => !b.has_real_pages && b.md5);
+  batchCurrentIdx = 0;
+
+  if (!batchQueue.length) {
+    const btn = document.getElementById('btn-batch-realpages');
+    const origText = btn.textContent;
+    btn.textContent = 'Nenhum livro pendente';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+    return;
+  }
+
+  document.body.classList.add('overlay-open');
+  document.getElementById('batch-dialog').classList.add('visible');
+  document.getElementById('batch-skip-btn').disabled = false;
+  batchLoadNext();
+}
+
+function closeBatchDialog() {
+  document.getElementById('batch-dialog').classList.remove('visible');
+  document.body.classList.remove('overlay-open');
+}
+
+function initBatchSearch() {
+  document.getElementById('btn-batch-realpages').addEventListener('click', openBatchDialog);
+  document.getElementById('batch-close').addEventListener('click', closeBatchDialog);
+  document.getElementById('batch-stop-btn').addEventListener('click', closeBatchDialog);
+  document.getElementById('batch-dialog').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeBatchDialog();
+  });
+  document.getElementById('batch-skip-btn').addEventListener('click', () => {
+    batchCurrentIdx++;
+    batchLoadNext();
+  });
+}
+
 /* ── Init ──────────────────────────────────────────────────────────────── */
 async function init() {
   // Load persistent settings
@@ -1134,6 +1494,8 @@ async function init() {
   initAccentPicker();
   initFilterAddButtons();
   initSettingsDialog();
+  initRealPagesDialog();
+  initBatchSearch();
 
   document.getElementById('btn-refresh').addEventListener('click', fetchStats);
   document.getElementById('dialog-close').addEventListener('click', hideTop10List);

@@ -162,6 +162,19 @@
           <span class="kpi-sub" id="desc-max-streak">Recorde: — dias</span>
         </div>
       </div>
+      <div class="kpi-card kpi-card--teal">
+        <div class="kpi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            <text x="12" y="16" font-size="7" text-anchor="middle" fill="currentColor" stroke="none">W</text>
+          </svg>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-label">Média Pal./min</span>
+          <div class="kpi-value"><span id="val-avg-wpm">—</span> <span class="kpi-unit">p/min</span></div>
+          <span class="kpi-sub" id="desc-wpm-profile">—</span>
+        </div>
+      </div>
     </section>
 
     <!-- HEATMAP -->
@@ -327,6 +340,7 @@
               <th class="sortable" data-col="reading_days" data-dir="asc">Dias <span class="sort-icon">↕</span></th>
               <th class="sortable" data-col="time_hours" data-dir="asc">Tempo <span class="sort-icon">↕</span></th>
               <th class="sortable" data-col="speed_pages_hour" data-dir="asc">Vel. <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="wpm" data-dir="asc">Pal./min <span class="sort-icon">↕</span></th>
               <th class="sortable" data-col="highlights" data-dir="asc">Anot. <span class="sort-icon">↕</span></th>
               <th class="sortable" data-col="last_open" data-dir="asc">Última Abertura <span class="sort-icon">↕</span></th>
             </tr>
@@ -410,6 +424,17 @@
           Carregue os dados para ver a prévia dos filtros.
         </div>
 
+        <!-- ── Batch Real Pages ───────────────────────────────────────── -->
+        <div class="setting-section">
+          <div class="setting-section-title">Páginas Reais (Hardcover)</div>
+          <p class="settings-intro">
+            Busca o número real de páginas no Hardcover livro a livro, exibindo os resultados para você escolher a edição correta ou pular.
+          </p>
+          <button id="btn-batch-realpages" class="batch-rp-btn">
+            <span class="batch-rp-btn-label">Buscar páginas reais em lote</span>
+          </button>
+        </div>
+
       </div>
 
       <div class="settings-footer">
@@ -433,6 +458,67 @@
       </div>
       <div class="dialog-body">
         <div id="dialog-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real Pages Dialog (manual) -->
+  <div id="realpages-dialog" class="dialog">
+    <div class="dialog-content dialog-content--wide">
+      <div class="dialog-header">
+        <h2>Páginas Reais</h2>
+        <button id="realpages-close" class="dialog-close" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div id="realpages-book-info" class="rp-book-info"></div>
+        <div class="rp-search-row">
+          <input type="text" id="realpages-search-input" class="rp-search-input" placeholder="Buscar título no Hardcover…">
+          <button id="realpages-search-btn" class="rp-search-btn">Buscar</button>
+        </div>
+        <div id="realpages-loading" class="rp-loading hidden">Buscando…</div>
+        <div id="realpages-error" class="rp-error hidden"></div>
+        <div id="realpages-results" class="rp-results"></div>
+        <div class="rp-manual">
+          <div class="rp-manual-divider">ou insira manualmente</div>
+          <div class="rp-manual-row">
+            <input type="number" id="realpages-manual-input" class="rp-manual-input" placeholder="Nº de páginas" min="1">
+            <button id="realpages-manual-btn" class="rp-search-btn">Salvar</button>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button id="realpages-cancel" class="settings-btn-secondary">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Dialog (interactive) -->
+  <div id="batch-dialog" class="dialog">
+    <div class="dialog-content dialog-content--wide">
+      <div class="dialog-header">
+        <h2>Busca em Lote — Páginas Reais</h2>
+        <button id="batch-close" class="dialog-close" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="batch-progress" id="batch-progress">Livro <span id="batch-idx">0</span> de <span id="batch-total">0</span></div>
+        <div id="batch-book-info" class="rp-book-info"></div>
+        <div id="batch-loading" class="rp-loading hidden">Buscando no Hardcover…</div>
+        <div id="batch-error" class="rp-error hidden"></div>
+        <div id="batch-results" class="rp-results"></div>
+      </div>
+      <div class="dialog-footer">
+        <button id="batch-skip-btn" class="settings-btn-secondary">Pular</button>
+        <button id="batch-stop-btn" class="settings-btn-secondary" style="border-color:#f87171;color:#f87171">Cancelar</button>
       </div>
     </div>
   </div>

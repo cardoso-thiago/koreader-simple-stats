@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """KOReader Estante - Backend"""
-import os, sys, json, sqlite3, datetime, urllib.parse, tempfile, hashlib, threading
+import os, sys, json, sqlite3, datetime, urllib.parse, tempfile, hashlib, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DB_PATH = os.environ.get("DB_PATH", "statistics.sqlite3")
@@ -93,6 +93,68 @@ def save_settings(settings):
                 os.unlink(tmp_path)
         except OSError:
             pass
+
+# ── Hardcover / Real Pages ───────────────────────────────────────────────
+
+import hardcover
+
+REAL_PAGES_DB = os.environ.get(
+    "REAL_PAGES_DB",
+    os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "real_pages.sqlite3"),
+)
+
+def init_real_pages_db():
+    try:
+        conn = sqlite3.connect(REAL_PAGES_DB)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS real_pages ("
+            "md5 TEXT PRIMARY KEY,"
+            "pages INTEGER NOT NULL,"
+            "title TEXT,"
+            "author TEXT,"
+            "edition_id TEXT,"
+            "book_id TEXT,"
+            "updated_at INTEGER NOT NULL)"
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[real_pages] init error: {e}")
+
+def get_all_real_pages():
+    try:
+        conn = sqlite3.connect(REAL_PAGES_DB)
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute("SELECT * FROM real_pages ORDER BY updated_at DESC")
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception:
+        return []
+
+def save_real_page(md5, pages, title="", author="", edition_id="", book_id=""):
+    try:
+        conn = sqlite3.connect(REAL_PAGES_DB)
+        conn.execute(
+            "INSERT OR REPLACE INTO real_pages (md5, pages, title, author, edition_id, book_id, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (md5, pages, title, author, edition_id, book_id, int(time.time())),
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+def delete_real_page(md5):
+    try:
+        conn = sqlite3.connect(REAL_PAGES_DB)
+        conn.execute("DELETE FROM real_pages WHERE md5 = ?", (md5,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
 
 # ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -214,6 +276,10 @@ def _save_stats_cache(filters_raw, result):
             _stats_cache.pop(next(iter(_stats_cache)))
         _stats_cache[key] = result
 
+def _clear_stats_cache():
+    with _stats_cache_lock:
+        _stats_cache.clear()
+
 # ── Statistics engine ─────────────────────────────────────────────────────
 
 def get_statistics(raw_filters=None):
@@ -227,6 +293,9 @@ def get_statistics(raw_filters=None):
         conn=sqlite3.connect(f"file:{DB_PATH}?mode=ro",uri=True); c=conn.cursor()
         parsed_filters = _parse_filters(raw_filters)
 
+        # ── 0. Load real pages ─────────────────────────────────────────
+        real_pages_map = {r["md5"]: r for r in get_all_real_pages()}
+
         # ── 1. Load all books, deduplicate, determine status ────────────
         c.execute("SELECT id,title,authors,pages,total_read_pages,total_read_time,"
                   "last_open,highlights,notes,md5 FROM book ORDER BY last_open DESC")
@@ -239,16 +308,28 @@ def get_statistics(raw_filters=None):
             if md5:
                 if md5 in seen_set: continue
                 seen_set.add(md5)
+            rp = real_pages_map.get(md5) if md5 else None
+            has_rp = rp is not None
+            ko_pages = r[3] or 1
+            effective_pages = rp["pages"] if has_rp else ko_pages
             books.append({"id":r[0],"title":r[1] or "Sem Título","author":fmt_author(r[2]),
-                "pages":r[3] or 1,"read_pages":r[4] or 0,"read_time":r[5] or 0,
-                "last_open":r[6] or 0,"highlights":r[7] or 0,"notes":r[8] or 0,"md5":md5})
+                "pages":ko_pages,"read_pages":r[4] or 0,"read_time":r[5] or 0,
+                "last_open":r[6] or 0,"highlights":r[7] or 0,"notes":r[8] or 0,"md5":md5,
+                "effective_pages":effective_pages,"has_real_pages":has_rp,
+                "real_pages":rp["pages"] if has_rp else None})
 
         mx=max((b["last_open"] for b in books),default=0)
         books=[b for b in books if not ((b["read_pages"]<=5 or b["read_time"]<=300) and b["last_open"]<mx-7*86400)]
 
         for b in books:
-            b["progress"]=round(min(100.0,b["read_pages"]/b["pages"]*100 if b["pages"]>0 else 0),1)
-            b["speed"]=round(b["read_pages"]/(b["read_time"]/3600.0),1) if b["read_time"]>0 else 0.0
+            ep = b["effective_pages"]
+            b["progress"]=round(min(100.0,b["read_pages"]/ep*100 if ep>0 else 0),1)
+            # Speed: use estimated pages read (capped at effective_pages when real_pages available)
+            if b["has_real_pages"]:
+                speed_pages = min(b["read_pages"], ep)
+            else:
+                speed_pages = b["read_pages"]
+            b["speed"]=round(speed_pages/(b["read_time"]/3600.0),1) if b["read_time"]>0 else 0.0
 
         # Page stats for status computation
         c.execute("SELECT id_book,MAX(page),MAX(total_pages) FROM page_stat_data GROUP BY id_book")
@@ -336,7 +417,8 @@ def get_statistics(raw_filters=None):
         nf=sum(1 for b in books if b["status"]=="finished")
         nr=sum(1 for b in books if b["status"]=="reading")
         na=sum(1 for b in books if b["status"]=="abandoned")
-        ts=sum(b["read_time"] for b in books); tp=sum(b["read_pages"] for b in books)
+        ts=sum(b["read_time"] for b in books)
+        tp=sum(min(b["read_pages"], b["effective_pages"]) if b["has_real_pages"] else b["read_pages"] for b in books)
         th=sum(b["highlights"] for b in books); tn=sum(b["notes"] for b in books)
         spd=round(tp/(ts/3600.0),1) if ts>0 else 0.0
         d30=today-datetime.timedelta(days=30)
@@ -345,7 +427,7 @@ def get_statistics(raw_filters=None):
 
         sr=["<100","100–199","200–299","300–399","400–499","500–999","1000–1999","2000–2999","3000+"]; sc=[0]*9
         for b in books:
-            p=b["pages"]
+            p=b["effective_pages"]
             if p<100:sc[0]+=1
             elif p<200:sc[1]+=1
             elif p<300:sc[2]+=1
@@ -357,10 +439,24 @@ def get_statistics(raw_filters=None):
             else:sc[8]+=1
         size_dist=[{"range":r,"count":c} for r,c in zip(sr,sc)]
 
+        wpm_list = []
+        for b in books:
+            w = round(b["speed"] * 300 / 60, 0) if b["speed"] > 0 else 0
+            if b["has_real_pages"] and w > 0:
+                wpm_list.append(w)
+
+        avg_wpm = round(sum(wpm_list) / len(wpm_list), 0) if wpm_list else 0
+        if avg_wpm <= 200:
+            wpm_profile = "Leitor Analítico"
+        elif avg_wpm <= 300:
+            wpm_profile = "Velocidade Padrão"
+        else:
+            wpm_profile = "Leitor Rápido"
+
         summary={"total_books":len(books),"finished_books":nf,"reading_books":nr,"abandoned_books":na,
             "total_time_seconds":ts,"total_pages_read":tp,"total_highlights":th,"total_notes":tn,
             "avg_speed_pages_hour":spd,"avg_page_time_seconds":round(avg_pt,1),
-            "days_read_30d":days30,"hours_30d":hrs30}
+            "days_read_30d":days30,"hours_30d":hrs30,"avg_wpm":avg_wpm,"wpm_profile":wpm_profile}
 
         amap={}
         for b in books:
@@ -373,10 +469,13 @@ def get_statistics(raw_filters=None):
         books_out=[]
         for b in books:
             lo=(datetime.datetime.fromtimestamp(b["last_open"],tz=TZ_OFF).strftime('%Y-%m-%d %H:%M') if b["last_open"] else "N/A")
+            wpm = round(b["speed"] * 300 / 60, 0) if b["speed"] > 0 else 0
             books_out.append({"id":b["id"],"title":b["title"],"author":b["author"],"pages":b["pages"],
                 "read_pages":b["read_pages"],"progress":b["progress"],"time_hours":round(b["read_time"]/3600.0,1),
                 "speed_pages_hour":b["speed"],"last_open":lo,"highlights":b["highlights"],"notes":b["notes"],
-                "status":b["status"],"reading_days":reading_span.get(b["id"],0)})
+                "status":b["status"],"reading_days":reading_span.get(b["id"],0),"md5":b["md5"],
+                "has_real_pages":b["has_real_pages"],"real_pages":b["real_pages"],
+                "effective_pages":b["effective_pages"],"wpm":wpm})
 
         ms=cs=0
         if dates:
@@ -439,7 +538,8 @@ def get_statistics(raw_filters=None):
             "longest_book":lng,"most_time_book":mt,"fastest_book":fb,"slowest_book":sb,
             "preferred_hour":ph,"preferred_dow":pd,"reader_profile":prof,
             "top10_longest":top10_longest,"top10_most_time":top10_most_time,
-            "top10_fastest":top10_fastest,"top10_slowest":top10_slowest}
+            "top10_fastest":top10_fastest,"top10_slowest":top10_slowest,
+            "avg_wpm":avg_wpm,"wpm_profile":wpm_profile}
 
         result={
             "summary":summary,"insights":insights,
@@ -506,6 +606,9 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/settings":
             self.send_json(load_settings()); return
 
+        if path=="/api/real-pages":
+            self.send_json({"entries": get_all_real_pages()}); return
+
         if path=="/api/stats":
             filters_raw = qs.get("filters", [None])[0]
             cached = _check_stats_cache(filters_raw)
@@ -533,6 +636,56 @@ class Handler(BaseHTTPRequestHandler):
         else: self.send_error(404)
     def do_POST(self):
         parsed=urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/real-pages/search":
+            try:
+                body = self._read_json_body()
+                title = body.get("title", "").strip()
+                author = body.get("author", "").strip()
+                if not title:
+                    self.send_json({"error": "title is required"}, status=400); return
+                query = f"{title} {author}" if author else title
+                results = hardcover.search_editions(query)
+                self.send_json({"results": results})
+            except Exception as e:
+                self.send_json({"error": str(e)}, status=500)
+            return
+
+        if parsed.path == "/api/real-pages/save":
+            try:
+                body = self._read_json_body()
+                md5 = body.get("md5", "").strip()
+                pages = body.get("pages")
+                if not md5 or pages is None:
+                    self.send_json({"error": "md5 and pages are required"}, status=400); return
+                ok = save_real_page(
+                    md5=md5,
+                    pages=int(pages),
+                    title=body.get("title", ""),
+                    author=body.get("author", ""),
+                    edition_id=body.get("edition_id", ""),
+                    book_id=body.get("book_id", ""),
+                )
+                if ok:
+                    _clear_stats_cache()
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"error": str(e)}, status=500)
+            return
+
+        if parsed.path == "/api/real-pages/delete":
+            try:
+                body = self._read_json_body()
+                md5 = body.get("md5", "").strip()
+                if not md5:
+                    self.send_json({"error": "md5 is required"}, status=400); return
+                ok = delete_real_page(md5)
+                if ok:
+                    _clear_stats_cache()
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"error": str(e)}, status=500)
+            return
+
         if parsed.path != "/api/settings":
             self.send_error(404)
             return
@@ -553,6 +706,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(normalized)
 
 def run():
+    init_real_pages_db()
     print(f"{'─'*52}\n  KOReader Estante · http://localhost:{PORT}")
     print(f"  DB: {os.path.abspath(DB_PATH)}")
     print(f"  Status: {'✓ Disponível' if os.path.exists(DB_PATH) else '⚠ Não encontrado'}\n{'─'*52}")

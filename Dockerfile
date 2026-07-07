@@ -6,6 +6,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY app.py .
+COPY hardcover.py .
 COPY web/ ./web/
 
 EXPOSE 8080

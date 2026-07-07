@@ -25,6 +25,8 @@
   --violet-dim: rgba(159,141,215,0.12);
   --rose:       #d77d7d;
   --rose-dim:   rgba(215,125,125,0.12);
+  --teal:       #4fd1c5;
+  --teal-dim:   rgba(79,209,197,0.12);
 
   --text-1: #edf2f7;
   --text-2: #9aa8bb;
@@ -366,6 +368,7 @@ select:focus-visible,
 .kpi-card--green::before { background: var(--green); }
 .kpi-card--violet::before{ background: var(--violet); }
 .kpi-card--rose::before  { background: var(--rose); }
+.kpi-card--teal::before  { background: var(--teal); }
 
 .kpi-card:hover { border-color: var(--border-2); transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
@@ -380,6 +383,7 @@ select:focus-visible,
 .kpi-card--green .kpi-icon { background: var(--green-dim); color: var(--green); }
 .kpi-card--violet.kpi-icon, .kpi-card--violet .kpi-icon { background: var(--violet-dim); color: var(--violet); }
 .kpi-card--rose  .kpi-icon { background: var(--rose-dim);  color: var(--rose);  }
+.kpi-card--teal  .kpi-icon { background: var(--teal-dim);  color: var(--teal);  }
 
 .kpi-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .kpi-label { font-size: 12px; font-weight: 500; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -1188,3 +1192,102 @@ th.sort-active .sort-icon { opacity: 1; }
 .dialog-empty { color: var(--text-3); font-size: 14px; text-align: center; padding: 32px; }
 
 body.overlay-open { overflow: hidden; }
+
+/* ── Real Pages ───────────────────────────────────────────────────── */
+.dialog-content--wide { max-width: 560px; }
+
+.rp-book-info {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.rp-book-info strong { font-size: 15px; color: var(--text-1); }
+.rp-author { font-size: 13px; color: var(--text-3); }
+
+.rp-search-row {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.rp-search-input {
+  flex: 1; padding: 8px 12px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-1); font-size: 14px; font-family: inherit;
+  outline: none; transition: border .15s;
+}
+.rp-search-input:focus { border-color: var(--accent, #d4a853); }
+.rp-search-btn {
+  padding: 8px 16px; border-radius: 6px; border: none;
+  background: var(--accent, #d4a853); color: #0b0f14;
+  font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.rp-search-btn:hover { filter: brightness(1.1); }
+
+.rp-loading { color: var(--text-3); font-size: 13px; padding: 16px 0; text-align: center; }
+.rp-error { color: #f87171; font-size: 13px; padding: 8px 12px; background: rgba(248,113,113,0.1); border-radius: 6px; margin-bottom: 12px; }
+.rp-results { max-height: 400px; overflow-y: auto; }
+
+.rp-book-group {
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.rp-book-group:last-child { border-bottom: none; }
+.rp-book-title { font-weight: 600; font-size: 14px; color: var(--text-1); }
+.rp-book-authors { font-size: 12px; color: var(--text-3); margin-bottom: 6px; }
+
+.rp-editions { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.rp-edition {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px; border-radius: 4px;
+  background: var(--surface-2); gap: 8px;
+}
+.rp-edition-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.rp-edition-pages { font-size: 14px; font-weight: 500; color: var(--text-1); }
+.rp-edition-meta { font-size: 11px; color: var(--text-3); }
+.rp-edition-isbn { font-size: 10px; color: var(--text-3); font-family: var(--f-mono); }
+.rp-select-btn {
+  flex-shrink: 0; padding: 4px 12px; border-radius: 4px; border: none;
+  background: var(--accent, #d4a853); color: #0b0f14;
+  font-weight: 600; font-size: 12px; cursor: pointer;
+}
+.rp-select-btn:hover { filter: brightness(1.1); }
+.rp-select-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rp-manual { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.rp-manual-divider { font-size: 11px; color: var(--text-3); text-align: center; margin-bottom: 8px; }
+.rp-manual-row { display: flex; gap: 8px; }
+.rp-manual-input {
+  flex: 1; padding: 8px 12px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-1); font-size: 14px; font-family: inherit;
+  outline: none; transition: border .15s; -moz-appearance: textfield;
+}
+.rp-manual-input:focus { border-color: var(--accent, #d4a853); }
+.rp-manual-input::-webkit-outer-spin-button,
+.rp-manual-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.dialog-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px;
+}
+
+/* Pages column indicators */
+.pages-cell { cursor: pointer; position: relative; }
+.pages-cell:hover { color: var(--accent, #d4a853); }
+.rp-indicator { color: var(--accent, #d4a853); }
+.rp-missing { color: var(--text-3); cursor: pointer; }
+.rp-missing:hover { color: var(--accent, #d4a853); }
+
+/* ── Batch Real Pages ──────────────────────────────────────────────── */
+.batch-rp-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-1);
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+}
+.batch-rp-btn:hover { border-color: var(--accent, #d4a853); background: var(--surface-1); }
+.batch-rp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.batch-rp-btn-label { flex: 1; text-align: left; }
+
+.batch-progress {
+  font-size: 12px; color: var(--text-3); margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.batch-done { color: #4ade80; font-weight: 600; }
