@@ -29,13 +29,13 @@ let state = {
 
 /* ── Settings (server-side, with local cache fallback) ────────────────── */
 const ACCENT_PRESETS = [
-  { name: 'Âmbar',   hex: '#d4a853' },
-  { name: 'Azul',    hex: '#5b9cf5' },
-  { name: 'Verde',   hex: '#4ade80' },
-  { name: 'Roxo',    hex: '#a78bfa' },
-  { name: 'Rosa',    hex: '#f472b6' },
-  { name: 'Teal',    hex: '#2dd4bf' },
-  { name: 'Laranja', hex: '#fb923c' },
+  { name: 'Carimbo', hex: '#cf5f4a' },
+  { name: 'Âmbar',   hex: '#c9a45e' },
+  { name: 'Azul',    hex: '#7a9fc4' },
+  { name: 'Verde',   hex: '#8fb67e' },
+  { name: 'Roxo',    hex: '#a08fc9' },
+  { name: 'Rosa',    hex: '#c98a8a' },
+  { name: 'Teal',    hex: '#7fb6b0' },
 ];
 
 const SETTINGS_CACHE_KEY = 'koreader_settings_cache_v2';
@@ -242,6 +242,7 @@ function createFilterRow(op, val, onChange) {
   rm.className = 'filter-remove';
   rm.textContent = '×';
   rm.title = 'Remover filtro';
+  rm.setAttribute('aria-label', 'Remover filtro');
   rm.addEventListener('click', () => { row.remove(); onChange(); });
 
   row.appendChild(sel);
@@ -442,18 +443,18 @@ function setLoadingState(isLoading) {
 /* ── Chart defaults ────────────────────────────────────────────────────── */
 const CHART_DEFAULTS = {
   font: { family: "'Manrope', -apple-system, BlinkMacSystemFont, sans-serif", size: 11 },
-  color: '#607086',
+  color: '#96887a',
 };
 Chart.defaults.color = CHART_DEFAULTS.color;
 Chart.defaults.font  = CHART_DEFAULTS.font;
 
 function baseTooltip() {
   return {
-    backgroundColor: '#171d28',
-    borderColor: 'rgba(226,232,240,0.12)',
+    backgroundColor: '#241e19',
+    borderColor: 'rgba(243,237,228,0.14)',
     borderWidth: 1,
-    titleColor: '#edf2f7',
-    bodyColor: '#9aa8bb',
+    titleColor: '#f2ece2',
+    bodyColor: '#b6a998',
     padding: 10,
     cornerRadius: 8,
     titleFont: { family: "'Manrope', sans-serif", size: 12, weight: '600' },
@@ -461,10 +462,10 @@ function baseTooltip() {
   };
 }
 function baseGrid() {
-  return { color: 'rgba(226,232,240,0.05)', drawBorder: false };
+  return { color: 'rgba(243,237,228,0.055)', drawBorder: false };
 }
 function baseTick() {
-  return { color: '#607086', font: { size: 10 } };
+  return { color: '#96887a', font: { size: 10 } };
 }
 
 function destroyChart(key) {
@@ -474,7 +475,7 @@ function destroyChart(key) {
 /* ── Read accent RGB from CSS variable ─────────────────────────────── */
 function getAccentRGB() {
   const val = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim();
-  return val || '212, 168, 83';
+  return val || '207, 95, 74';
 }
 
 /* ── Monthly chart ─────────────────────────────────────────────────────── */
@@ -521,8 +522,8 @@ function renderHourlyChart(hourly) {
   destroyChart('hourly');
   const ctx = document.getElementById('chart-hourly').getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-  gradient.addColorStop(0,   'rgba(91,156,245,0.35)');
-  gradient.addColorStop(1,   'rgba(91,156,245,0.02)');
+  gradient.addColorStop(0,   'rgba(108, 154, 196, 0.35)');
+  gradient.addColorStop(1,   'rgba(108, 154, 196, 0.02)');
   state.charts.hourly = new Chart(ctx, {
     type: 'line',
     data: {
@@ -531,7 +532,7 @@ function renderHourlyChart(hourly) {
         label: 'Horas',
         data: hourly.map(d => d.hours),
         fill: true, backgroundColor: gradient,
-        borderColor: 'rgba(91,156,245,0.8)', borderWidth: 2,
+        borderColor: 'rgba(108, 154, 196, 0.8)', borderWidth: 2,
         pointRadius: 0, pointHoverRadius: 4,
         tension: 0.35,
       }],
@@ -560,8 +561,8 @@ function renderWeeklyChart(weekly) {
         label: 'Horas',
         data: weekly.map(d => d.hours),
         backgroundColor: weekly.map(d =>
-          d.hours === max ? 'rgba(167,139,250,0.75)' : 'rgba(167,139,250,0.3)'),
-        borderColor: 'rgba(167,139,250,0.6)',
+          d.hours === max ? 'rgba(160,143,201,0.75)' : 'rgba(160,143,201,0.3)'),
+        borderColor: 'rgba(160,143,201,0.6)',
         borderWidth: 1, borderRadius: 4, borderSkipped: false,
       }],
     },
@@ -588,14 +589,14 @@ const centerTextPlugin = {
     const centerX = width / 2;
     const centerY = height / 2 - 2;
 
-    ctx.font = 'bold 20px "DM Sans", sans-serif';
-    ctx.fillStyle = '#f0f4f8';
+    ctx.font = '700 20px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#f2ece2';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.fillText(String(total), centerX, centerY - 2);
 
-    ctx.font = '11px "DM Sans", sans-serif';
-    ctx.fillStyle = '#8898b4';
+    ctx.font = '500 11px "Manrope", sans-serif';
+    ctx.fillStyle = '#96887a';
     ctx.textBaseline = 'top';
     ctx.fillText('livros', centerX, centerY + 2);
     ctx.restore();
@@ -609,15 +610,15 @@ function renderStatusChart(summary) {
   const { finished_books: fin, reading_books: rdg, abandoned_books: abn } = summary;
 
   const entries = [
-    { label: 'Concluídos', value: fin, color: 'rgba(74,222,128,0.8)', border: 'rgba(74,222,128,0.4)' },
-    { label: 'Lendo',      value: rdg, color: 'rgba(91,156,245,0.8)', border: 'rgba(91,156,245,0.4)' },
-    { label: 'Pausados',   value: abn, color: 'rgba(70,84,106,0.6)',  border: 'rgba(70,84,106,0.4)' },
+    { label: 'Concluídos', value: fin, color: 'rgba(143,182,126,0.8)', border: 'rgba(143,182,126,0.4)' },
+    { label: 'Lendo',      value: rdg, color: 'rgba(108,154,196,0.8)', border: 'rgba(108,154,196,0.4)' },
+    { label: 'Pausados',   value: abn, color: 'rgba(110,100,89,0.6)',  border: 'rgba(110,100,89,0.4)' },
   ].filter(e => e.value > 0);
 
   if (!entries.length) {
     state.charts.status = new Chart(ctx, {
       type: 'doughnut',
-      data: { labels: ['Sem dados'], datasets: [{ data: [1], backgroundColor: ['rgba(70,84,106,0.2)'], borderWidth: 0 }] },
+      data: { labels: ['Sem dados'], datasets: [{ data: [1], backgroundColor: ['rgba(110,100,89,0.2)'], borderWidth: 0 }] },
       options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { display: false } } },
       plugins: [centerTextPlugin],
     });
@@ -670,8 +671,8 @@ function renderSizeChart(sizeDist) {
       datasets: [{
         label: 'Livros',
         data: filtered.map(d => d.count),
-        backgroundColor: 'rgba(167,139,250,0.4)',
-        borderColor: 'rgba(167,139,250,0.7)',
+        backgroundColor: 'rgba(160,143,201,0.4)',
+        borderColor: 'rgba(160,143,201,0.7)',
         borderWidth: 1, borderRadius: 4, borderSkipped: false,
       }],
     },
@@ -707,33 +708,44 @@ function renderHeatmap(cells) {
 
   const monthOrder = [];
   let prevMonth = '';
-  cells.forEach(cell => {
+  cells.forEach((cell, idx) => {
     const mo = cell.date.slice(0, 7);
     if (mo !== prevMonth) {
-      monthOrder.push(mo);
+      // ancoramos o rótulo na coluna de semanas onde o mês realmente começa
+      monthOrder.push({ mo, startCol: Math.floor(idx / 7) });
       prevMonth = mo;
     }
   });
 
-  monthOrder.forEach(mo => {
+  monthOrder.forEach(entry => {
     const label = document.createElement('span');
-    const dt = new Date(mo + '-01');
+    // constrói a data em hora local — evita o desvio de mês em fusos
+    // negativos (new Date('YYYY-MM-01') é interpretado como UTC, virando o mês anterior)
+    const [yy, mm] = entry.mo.split('-').map(Number);
+    const dt = new Date(yy, mm - 1, 1);
     label.textContent = dt.toLocaleString('pt-BR', { month: 'short' });
+    label.style.left = `calc(${entry.startCol} * (var(--heatmap-cell, 14px) + var(--heatmap-gap, 2px)))`;
     months.appendChild(label);
   });
 
-  cells.forEach(cell => {
+  cells.forEach((cell, idx) => {
     const div = document.createElement('div');
     div.className = 'hm-cell';
+    div.style.setProperty('--i', idx);
     div.dataset.level = cell.future ? 'future' : getHeatLevel(cell.hours);
     if (cell.future) div.dataset.future = 'true';
+    if (!cell.future) {
+      const today = new Date();
+      const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (cell.date === iso) div.dataset.today = 'true';
+    }
     if (!cell.future && cell.hours > 0) {
       const dt = new Date(cell.date + 'T00:00:00');
-      const label = dt.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+      const label = dt.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
       div.title = `${label} · ${cell.hours.toFixed(1)}h`;
     } else if (!cell.future) {
       const dt = new Date(cell.date + 'T00:00:00');
-      div.title = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      div.title = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
     }
     grid.appendChild(div);
   });
@@ -905,7 +917,7 @@ function renderBooksTable() {
 
   tbody.innerHTML = list.map(b => {
     const pctFill = Math.min(100, b.progress);
-    const pctColor = b.status === 'finished' ? '#4ade80' : b.status === 'reading' ? '#5b9cf5' : '#46546a';
+    const pctColor = b.status === 'finished' ? '#8fb67e' : b.status === 'reading' ? '#7a9fc4' : '#6e6459';
 
     let pagesDisplay;
     if (b.has_real_pages && b.real_pages != null) {
@@ -1496,6 +1508,18 @@ async function init() {
   initSettingsDialog();
   initRealPagesDialog();
   initBatchSearch();
+
+  // Cards de "Descobertas" abrem o Top 10 — acessíveis por teclado
+  document.querySelectorAll('.insight-card[data-list]').forEach(card => {
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        showTop10List(card.dataset.list);
+      }
+    });
+  });
 
   document.getElementById('btn-refresh').addEventListener('click', fetchStats);
   document.getElementById('dialog-close').addEventListener('click', hideTop10List);

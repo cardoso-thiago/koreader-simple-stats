@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KOReader · Estante</title>
   <meta name="description" content="Painel com estatísticas de leitura do KOReader, com visão de biblioteca, hábitos, calendário e detalhes por livro.">
-  <meta name="theme-color" content="#0b0f14">
+  <meta name="theme-color" content="#141110">
   <meta property="og:title" content="KOReader · Estante">
   <meta property="og:description" content="Acompanhe sua biblioteca, ritmo de leitura e padrões ao longo do tempo.">
   <meta property="og:type" content="website">
@@ -40,13 +40,13 @@
         <span class="badge-dot"></span>
         <span class="badge-label">Conectando…</span>
       </div>
-      <button id="btn-settings" class="settings-btn" title="Configurações">
+      <button id="btn-settings" class="settings-btn" title="Configurações" aria-label="Abrir configurações">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
-      <button id="btn-refresh" class="btn-icon" title="Recarregar dados">
+      <button id="btn-refresh" class="btn-icon" title="Recarregar dados" aria-label="Recarregar dados">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
         </svg>
@@ -268,9 +268,9 @@
         <div class="chart-card-header">
           <h3>Atividade mensal</h3>
           <div class="chart-nav">
-            <button id="btn-prev-month" class="chart-nav-btn" title="Período anterior">←</button>
+            <button id="btn-prev-month" class="chart-nav-btn" title="Período anterior" aria-label="Período anterior">←</button>
             <span id="label-month-page" class="chart-nav-label">1 / 1</span>
-            <button id="btn-next-month" class="chart-nav-btn" title="Período seguinte">→</button>
+            <button id="btn-next-month" class="chart-nav-btn" title="Período seguinte" aria-label="Período seguinte">→</button>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
@@ -320,7 +320,7 @@
             <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-            <input type="text" id="search-books" class="search-input" placeholder="Buscar título ou autor…">
+            <input type="text" id="search-books" class="search-input" placeholder="Buscar título ou autor…" aria-label="Buscar livro ou autor">
           </div>
           <div class="filter-tabs">
             <button class="tab active" data-filter="all">Todos</button>
@@ -477,7 +477,7 @@
       <div class="dialog-body">
         <div id="realpages-book-info" class="rp-book-info"></div>
         <div class="rp-search-row">
-          <input type="text" id="realpages-search-input" class="rp-search-input" placeholder="Buscar título no Hardcover…">
+          <input type="text" id="realpages-search-input" class="rp-search-input" placeholder="Buscar título no Hardcover…" aria-label="Buscar título no Hardcover">
           <button id="realpages-search-btn" class="rp-search-btn">Buscar</button>
         </div>
         <div id="realpages-loading" class="rp-loading hidden">Buscando…</div>
@@ -486,7 +486,7 @@
         <div class="rp-manual">
           <div class="rp-manual-divider">ou insira manualmente</div>
           <div class="rp-manual-row">
-            <input type="number" id="realpages-manual-input" class="rp-manual-input" placeholder="Nº de páginas" min="1">
+            <input type="number" id="realpages-manual-input" class="rp-manual-input" placeholder="Nº de páginas" min="1" aria-label="Número de páginas">
             <button id="realpages-manual-btn" class="rp-search-btn">Salvar</button>
           </div>
         </div>
