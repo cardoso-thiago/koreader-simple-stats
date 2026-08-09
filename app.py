@@ -339,9 +339,14 @@ def get_statistics(raw_filters=None):
         c.execute("SELECT id_book,MAX(page),MAX(total_pages) FROM page_stat_data GROUP BY id_book")
         pstats={r[0]:(r[1],r[2]) for r in c.fetchall()}
 
+        # Check if book was ever fully read (any page_stat_data entry reached >= 95%)
+        c.execute("SELECT DISTINCT id_book FROM page_stat_data WHERE total_pages > 0 "
+                  "AND CAST(page AS REAL) / CAST(total_pages AS REAL) >= 0.95")
+        ever_finished = set(r[0] for r in c.fetchall())
+
         for b in books:
             mp,stp=pstats.get(b["id"],(0,0))
-            koreader_done = (mp/(stp or 1)>=0.95 or mp/(b["pages"] or 1)>=0.95)
+            koreader_done = (mp/(stp or 1)>=0.95 or mp/(b["pages"] or 1)>=0.95 or b["id"] in ever_finished)
             if b["has_real_pages"]:
                 fin = koreader_done
             else:
